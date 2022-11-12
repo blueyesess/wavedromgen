@@ -28,7 +28,7 @@ WaveDromGen is a GUI digital timing tool based on [wavedrom](https://wavedrom.co
 ### 5. Installation
 You can install in below 2 ways:
 
-**Way 1**：[Download the release](https://github.com/blueyesess/WaveDromGen/releases)（just for windows now）and click to exe.
+**Way 1**：[Download the release version](https://github.com/blueyesess/WaveDromGen/releases), then click exe to run it（just for windows now）.
 
 **Way 2**：Download python source code：
    1. git clone https://github.com/blueyesess/WaveDromGen.git
