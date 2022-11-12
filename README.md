@@ -1,7 +1,7 @@
 ![logo](asset/md/logo.png "logo")
 ### 1. About WaveDromGen
 
-WaveDromGen is a GUI digital timing tool based on [wavedrom](https://wavedrom.com)，it's more convenience than wavedrom because WaveDromGen don't need to code for waveform, you just need to click for what you need. WaveDromGen is more suitable for drawing in complex waveform. You can also code in WaveDromGen if you like.
+WaveDromGen is a GUI digital timing tool based on [wavedrom](https://wavedrom.com)，it's more convenience than wavedrom because WaveDromGen don't need to code, just click on canvas, and what you see is what you get, that's why WaveDromGen is more suitable for drawing complex waveform and adjusting them. If you need, you can also code in WaveDromGen, like wavedrom.
 
 ### 2. Features
 - Drawing waveform in GUI，coding or ascii waveform.
