@@ -103,6 +103,7 @@ image::asset/md/ui_relation.gif[gif relation]
 == Version modifiée
 
 **Ajouts de fonctionnalités**
+
 - Ajout langue (FR)
 - Ajout de documentations
 - Ajout de raccourcis
@@ -112,26 +113,28 @@ image::asset/md/ui_relation.gif[gif relation]
 - Ajout d'un panneau de gestion des périodes et phases
 
 **Modifications**
+
 - Modification du menu principal
 
 **Problèmes résolus :**
+
 - Fonctions "save", "saveAs" et "open"
-    - Permet la sauvegarde même si c'est pour un fichier qui a été ouvert
-    - Permet la sauvegarde sous... 
-    - Permet l'ouverture sans problème d'un fichier Json
+        * Permet la sauvegarde même si c'est pour un fichier qui a été ouvert
+        * Permet la sauvegarde sous... 
+        * Permet l'ouverture sans problème d'un fichier Json
 - Fonctions "delRow", "delCol", "copyRow"
-    - Permet de revenir à un état par défaut à la fin de chaque action de ces modes
+        * Permet de revenir à un état par défaut à la fin de chaque action de ces modes
 - lenRow < 1 ou lenCol < 1
-    - Permet de laisser une ligne/colonne par défaut lorsque toutes sont supprimées
+        * Permet de laisser une ligne/colonne par défaut lorsque toutes sont supprimées
 - Fonction "search" dans Editor
-    - Redimensionnement de la fenêtre par langue corrigé
+        * Redimensionnement de la fenêtre par langue corrigé
 - Fonction MouseWheel dans img_view
-    - Bind d'évenement "MouseWheel" par rapport à la dimension du canva pour défiler
+        * Bind d'évenement "MouseWheel" par rapport à la dimension du canva pour défiler
 - Fonction Annoter "relation"
-    - Permet de continuer à utiliser d'autres modes après l'ajout de relation
+        * Permet de continuer à utiliser d'autres modes après l'ajout de relation
 - Fonction du curseur dans img_view
-    - Permet au curseur de s'adapter en fonction de la dimension du canva
+        * Permet au curseur de s'adapter en fonction de la dimension du canva
 - Suppression des relations après le mode delRow
-    - Modèle modifié (fichier ./WaveDromDB.py) : lorsque qu'une ligne qui contient des edges/relations est supprimée alors les relations en rapport avec ses edges sont supprimés eux aussi
+        * Modèle modifié (fichier ./WaveDromDB.py) : lorsque qu'une ligne qui contient des edges/relations est supprimée alors les relations en rapport avec ses edges sont supprimés eux aussi
 - Fonction Annoter "edge"
-    - Permet de vérifier la valeur entrée lors de la saisie du nom d'un edge
+        * Permet de vérifier la valeur entrée lors de la saisie du nom d'un edge
