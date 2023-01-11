@@ -1,0 +1,137 @@
+== À propos de WaveDromGen
+
+_WaveDromGen_ est une interface graphique pour générer des chronogrammes numériques basée sur https://wavedrom.com/[_WaveDrom_]. Cet outil est plus pratique que le logiciel _WaveDrom_. En effet, il y a la possiblité de créer directement nos chronogrammes à partir de la zone de dessin. L'ajustement peut toujours se faire à partir du code _Json_.
+
+== Caractéristiques
+
+**Création**
+
+- dessiner des waveform dans l'interface graphique _WaveView_
+- coder des waveform en _Json_ dans l'éditeur de texte _EditorView_
+
+Ces deux view sont synchronisées.
+
+**Rendus**
+
+- formats _Json_, _PNG_ et _SVG_
+- possiblité d'avoir un rendu en Ascii dans _AsciiView_
+
+== Structure du répertoire
+
+[source, wavejson]
+----
+│  main.py                  # main entry
+│  package2exe.py           # package code to exe
+├─asset                     # image asset
+└─WaveDromGen# 
+        language.py         # UI language dict
+        WavedromASCII.py    # wavedrom to ascii
+        WaveDromCtrl.py     # contoller
+        WaveDromDB.py       # datebase model
+        WaveDromUI.py       # UI top
+        WaveImageDB.py      # icon binary database, for package all into exe
+        WaveNote.py         # waveform editor in text
+        __init__.py
+----
+
+image::asset/md/struct_en.png[structure]
+
+== Installation
+
+Deux manières de l'installer
+
+**1er façon**: https://github.com/Tamachiii/WaveDromGen/releases/[Download the release version], puis lancer l'exécutable（utilisable que sur Windows）.
+
+
+**2ème façon**: Télécharget le code source Python:
+        1. git clone https://github.com/Tamachiii/WaveDromGen.git
+        2. pip install -r requirement
+        3. python main.py
+
+== Utilisation
+
+=== WaveView
+
+image::asset/md/ui_wave.png[waveview]
+
+1. **Menu**: basic menu function
+2. **View**:
+	- WaveView: draw waveform by clicking canvas.
+	- EditorView: draw waveform by coding text.
+	- AsciiView: can't edit,output ascii waveform in realtime.
+3. **Wave Toolbar**
+        - **clk (clock):** in clk mode, clicking on the canvas will draw clock waveform. Clicking same position more than one time will adjust clock sensitive as below: **high level -> pos edge -> low level -> neg edge**.
+        - **sig (single-bit signal):** in sig mode, clicking on the canvas will draw single bit low . Click same position again to go high.
+        - **bus (muti-bit signal):** in bus mode, clicking on the canvas will draw bus tag. Click same position again to cancel.
+        - **x (no care signal):** in x mode, clicking on the canvas will draw x tag. Click same position again to cancel.
+        - **z (high impedance):** in bus mode, clicking on the canvas will draw z tag. Click same position again to cancel.
+        - **sel (select):** in sel mode, there are 4 usages according click position.
+                * 1. Clicking on non-waveform zone on the canvas will add the number of rows and columns. 
+                * 2. Dragging the waveform up or down will adjust the row index.
+                * 3. Holding down CTRL while dragging a waveform up or down will copy the corresponding waveform.
+                * 4. Dragging the waveform left and right will move the waveform laterally.
+    - **t (text):** in t mode, clicking signal name or bus tag could edit description.
+    - **clr (clear):** in clr mode, clicking waveform on canvas will clear all data about this signal.
+
+_documentation faite par https://github.com/blueyesess/wavedromgen/commits?author=blueyesess[blueyesess]_
+
+=== WaveView
+
+image::asset/md/ui_editor.png[editorview]
+
+4. **Editor Toolbar**
+        - **render: ** render the editor text to generate waveform.
+        - **copy: ** copy what select in editor.
+        - **paste: ** paste clipboard in editor.
+        - **undo**: undo last operation in editor.
+        - **redo**: redo last operation in editor.
+        - **find**: find in editor.
+5. **Editor: ** edit wavedrom in text, see https://wavedrom.com/tutorial.html[_WaveDrom_] for details.
+
+_documentation faite par https://github.com/blueyesess/wavedromgen/commits?author=blueyesess[blueyesess]_
+
+=== Demos
+
+**Création de waveform simples**
+
+image::asset/md/ui_waveview.gif[gif waveview]
+
+**Création de relations**
+
+image::asset/md/ui_relation.gif[gif relation]
+
+== Version modifiée
+
+**Ajouts de fonctionnalités**
+- Ajout langue (FR)
+- Ajout de documentations
+- Ajout de raccourcis
+- Ajout attributs lenRow/lenCol pour la barre de statue
+- Ajout barre de défilement dans WaveEditor
+- Ajout d'un panneau de gestion des relations
+- Ajout d'un panneau de gestion des périodes et phases
+
+**Modifications**
+- Modification du menu principal
+
+**Problèmes résolus :**
+- Fonctions "save", "saveAs" et "open"
+    - Permet la sauvegarde même si c'est pour un fichier qui a été ouvert
+    - Permet la sauvegarde sous... 
+    - Permet l'ouverture sans problème d'un fichier Json
+- Fonctions "delRow", "delCol", "copyRow"
+    - Permet de revenir à un état par défaut à la fin de chaque action de ces modes
+- lenRow < 1 ou lenCol < 1
+    - Permet de laisser une ligne/colonne par défaut lorsque toutes sont supprimées
+- Fonction "search" dans Editor
+    - Redimensionnement de la fenêtre par langue corrigé
+- Fonction MouseWheel dans img_view
+    - Bind d'évenement "MouseWheel" par rapport à la dimension du canva pour défiler
+- Fonction Annoter "relation"
+    - Permet de continuer à utiliser d'autres modes après l'ajout de relation
+- Fonction du curseur dans img_view
+    - Permet au curseur de s'adapter en fonction de la dimension du canva
+- Suppression des relations après le mode delRow
+    - Modèle modifié (fichier ./WaveDromDB.py) : lorsque qu'une ligne qui contient des edges/relations est supprimée alors les relations en rapport avec ses edges sont supprimés eux aussi
+- Fonction Annoter "edge"
+    - Permet de vérifier la valeur entrée lors de la saisie du nom d'un edge
