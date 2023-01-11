@@ -6,20 +6,20 @@ class WaveDromDB:
     def __init__(self):
         init_colum = 20
 
-        # 供外部访问变量
+        # Pour l'accès externe aux variables
         self.rowLen = 0
         self.colLen = 0
         self.nameLen = 0
         self.undoLen = 0
         self.redoLen = 0
 
-        # 私密变量
-        self.special = ['=', '2', '3', '4', '5', '6', '7', '8', '9']  # 特殊变量，用于总线描述
+        # Variable privée
+        self.special = ['=', '2', '3', '4', '5', '6', '7', '8', '9']  # Variable spéciale pour la description du bus
         self.__undo_list = []
         self.__redo_list = []
         self.history_depth = 5  # history buffer深度
-        self.__db = {}  # 核心数据库
-        # 初始数据库内容
+        self.__db = {}  # Base de données principale
+        # Contenu initial de la base de données
         self.__init_db = {
             'signal': [
                 {
@@ -60,12 +60,12 @@ class WaveDromDB:
             # },
         }
 
-        # 初始化
+        # Initialisation
         self.init()
 
     def init(self):
         """
-        初始化
+        Initialisation
         :return: None
         """
         self.write_all(self.__init_db)
@@ -73,28 +73,28 @@ class WaveDromDB:
 
     def write(self, typ, val, k=None, y=None, x=None, insert_mode=False):
         """
-        写入数据，写入wave时自动进行虚拟数据到真是数据转换
-        :param typ: 配置类型signal，edge，config
-        :param val: 写入值
+        Initialisation et écriture des données, et convertion automatique des données virtuelles en données réelles lors de l'écriture sur 'wave'
+        :param typ: Type de configuration : signal，edge，config
+        :param val: Valeur à écrire
         :param k: key
-        :param y: 行号
-        :param x: 列号
-        :param insert_mode: 在指定位置插入元素，否则，将替换该位置元素
+        :param y: Numéro de ligne
+        :param x: Numéro de colonne
+        :param insert_mode: Insérer un élément à la position spécifiée, sinon, remplacer l'élément à cette position
         :return: None
         """
         if typ == 'signal':
             db = self.__db['signal'][y][k]
-            if x is None:  # 没有 x 时写入整行
+            if x is None:  # Ecrire toute la ligne sans x
                 self.__db['signal'][y][k] = val
-            else:  # 有 x 时写入具体数
+            else:  # Écrire un nombre précis lorsqu'il y a x
                 if insert_mode:
                     self.__db['signal'][y][k] = db[:x] + val + db[x:]
                 else:
                     self.__db['signal'][y][k] = db[:x] + val + db[x + 1:]
 
-            if k == 'name':  # 写入信号名时，更新名字长度
+            if k == 'name':  # Lors de l'écriture d'un nom de signal, maj de la longueur du nom
                 self.nameLen = max(len(i['name']) for i in self.__db['signal'])
-            elif k == 'wave':  # 写入波形时，进行 virtual -> physical 转换
+            elif k == 'wave':  # Lors de l'écriture d'une forme d'onde, effectuez une conversion virtuelle -> physique
                 self.__db['signal'][y][k] = self.__decode(y)
                 # print(111, self.__db[typ][y][k])
         elif typ == 'edge':
@@ -104,16 +104,16 @@ class WaveDromDB:
 
     def read(self, typ, k=None, y=None, x=None, pop_mode=False):
         """
-        读取数据
-      :param typ: 配置类型signal，edge，config
+        Lecture des données
+        :param typ: Type de configuration : signal，edge，config
         :param k: key
-        :param y: 行号
-        :param x: 列号
-        :param pop_mode: 弹出指定位置的元素，否则，将读取该位置元素
+        :param y: Numéro de ligne
+        :param x: Numéro de colonne
+        :param pop_mode: Pop l'élément à la position spécifiée, sinon, l'élément à la position sera lu
         :return: str
         """
         if typ == 'signal':
-            if k == 'wave':  # 写入波形时，进行 physical -> virtual  转换
+            if k == 'wave':  # Lors de l'écriture d'une forme d'onde, effectuez une conversion physique -> virtuelle
                 if pop_mode:
                     if x == 0:
                         self.__db['signal'][y][k] = self.__db['signal'][y][k][x + 1:]
@@ -131,8 +131,8 @@ class WaveDromDB:
 
     def write_all(self, val):
         """
-        写入整个数据库
-        :param val: 数据字典
+        Ecriture dans toute la base de données
+        :param val: Dictionnaire de données
         :return: None
         """
         self.__db = val
@@ -140,15 +140,15 @@ class WaveDromDB:
 
     def read_all(self):
         """
-        读取整个数据库
+        Lecture de toute la base de données
         :return: dict
         """
         return self.__db.copy()
 
     def insert_row(self, num):
         """
-        在行尾插入行
-        :param num: 插入行数
+        Insertion d'une ligne en fin de ligne
+        :param num: Insérer le nombre de lignes
         :return:
         """
         new = {
@@ -165,8 +165,8 @@ class WaveDromDB:
 
     def insert_col(self, num):
         """
-        在列尾插入列
-        :param num: 插入列数
+        Insertion d'une colonne en fin de colonne
+        :param num: Insérer le nombre de colonnes
         :return: None
         """
         for i in range(self.rowLen):
@@ -179,11 +179,11 @@ class WaveDromDB:
 
     def swap_line(self, typ, src, dst, copy_mode=False):
         """
-        将src行内容与dst行内容交换
-        :param typ: 数据种类
-        :param src: source行索引
-        :param dst: destination行索引
-        :param copy_mode: 将复制src行到dst行，将额外增加1行
+        Échange le contenu de la ligne src avec le contenu de la ligne dst
+        :param typ: Type de données
+        :param src: Index de ligne source
+        :param dst: Index de la ligne de destination
+        :param copy_mode: Copiera la ligne src sur la ligne dst et ajoutera 1 ligne supplémentaire
         :return: None
         """
         if copy_mode:
@@ -195,19 +195,27 @@ class WaveDromDB:
 
     def del_row(self, typ, y):
         """
-        删除行
-        :param typ: 数据种类
-        :param y: 行索引
+        Suppression de la ligne
+        :param typ: Type de données
+        :param y: Indice de ligne
         :return: None
         """
-        self.__db[typ].pop(y)
+        result = self.__db[typ].pop(y)
+        # Suppression de toutes les relations en rapport avec les nodes présentaient dans la ligne y
+        for character in result['node']:
+            if character != '.':
+                if character in result['node']:
+                    for relation in self.__db['edge']:
+                        if character in relation:
+                            index_relation = self.__db['edge'].index(relation)
+                            self.__db['edge'].pop(index_relation)
         self.__update()
 
     def del_col(self, typ, x):
         """
-        删除列
-        :param typ:数据种类
-        :param x: 列索引
+        Suppression de la colonne
+        :param typ:Type de données
+        :param x: Indice de colonne
         :return: None
         """
         for i in range(self.rowLen):
@@ -219,7 +227,7 @@ class WaveDromDB:
 
     def __update(self):
         """
-        更新类成员变量
+        Maj des variables de membre de classe
         :return:
         """
         self.rowLen = len(self.__db['signal'])
@@ -228,10 +236,10 @@ class WaveDromDB:
 
     def __code(self, y):
         """
-        对wave数据从真实向虚拟转换，即把“."转换为真实值
-        例： 实际     -> 虚拟
+        Convertir les données 'wave' du réel au virtuel, c'est-à-dire convertir "." en une valeur réelle
+        Exemple : Réel -> Virtuel
             1..0..1 -> 1110001
-        :param y: 行索引
+        :param y: Indice de ligne
         :return: str
         """
         wave = self.__db['signal'][y]['wave']
@@ -245,10 +253,10 @@ class WaveDromDB:
 
     def __decode(self, y):
         """
-        对wave数据从虚拟向真实转换，即把重复值转换为'.'
-        例： 虚拟     -> 真实
+        Convertissement des données d'onde du virtuel au réel, c'est-à-dire convertir les valeurs répétées en '.'
+        Exemple : virtuel -> réel
             1110011 -> 1.。0.1.
-        :param y: 行索引
+        :param y: Indice de ligne
         :return: str
         """
         wave = self.__code(y)
@@ -266,39 +274,39 @@ class WaveDromDB:
 
     def record(self):
         """
-        将当前db记录至history buffer，用于实现undo逻辑
+        Enregistrez la base de données actuelle dans le tampon d'historique pour implémenter la logique d'annulation
         """
-        self.__redo_list.clear()  # 记录上一步时清空redo列表
+        self.__redo_list.clear()  # Effacer la liste de rétablissement lors de l'enregistrement de l'étape précédente
         self.__undo_list.append(json.dumps(self.__db))
         while len(self.__undo_list) > self.history_depth:
             self.__undo_list.pop(0)
-        # 更新成员状态，通过长度可知是否能undo/redo
+        # Mettre à jour le statut du membre, et s'il peut être annulé/rétabli peut être connu par la longueur
         self.undoLen = len(self.__undo_list)
         self.redoLen = len(self.__redo_list)
 
     def undo(self):
         """
-        撤销操作，恢复到之前状态
+        Annulation de l'opération, restauration de l'état précédent
         :return:
         """
         last = self.__undo_list.pop(-1)
         self.__redo_list.append(json.dumps(self.__db))
         json_db = json.loads(last)
         self.write_all(json_db)
-        # 更新成员状态，通过长度可知是否能undo/redo
+        # Maj du statut du membre, et s'il peut être annulé/rétabli peut être connu par la longueur
         self.undoLen = len(self.__undo_list)
         self.redoLen = len(self.__redo_list)
 
     def redo(self):
         """
-        重做上次操作
+        Rétablir la dernière action
         :return: None
         """
         last = self.__redo_list.pop(-1)
         self.__undo_list.append(json.dumps(self.__db))
         json_db = json.loads(last)
         self.write_all(json_db)
-        # 更新成员状态，通过长度可知是否能undo/redo
+        # Maj du statut du membre, et s'il peut être annulé/rétabli peut être connu par la longueur
         self.undoLen = len(self.__undo_list)
         self.redoLen = len(self.__redo_list)
 

@@ -11,53 +11,53 @@ from WaveDromGen.WavedromASCII import WavedromASCII
 
 class WaveDromCtrl:
     def __init__(self):
-        # 可配置参数
-        self.tmpDir = 'tmp/'  # 临时文件夹
+        # Paramètres configurables
+        self.tmpDir = 'tmp/'  # Dossier temporaire
 
-        # 外部访问变量, 每次数据改变时更新
-        self.__wdb = None  # 底层数据库
-        self.__lineChange = []  # 记录数据更改的行索引
-        self.imgDB = {}  # 存储分布渲染图片
+        # Variables accessibles en externe, mises à jour à chaque changement de données
+        self.__wdb = None  # Base de données sous-jacente
+        self.__lineChange = []  # Index de ligne où les modifications de données sont enregistrées
+        self.imgDB = {}  # Stocker des images de rendu distriuées
         self.lastNameLen = 0
         self.stepy = 30
-        self.curVal = 0  # 当前操作值
+        self.curVal = 0  # Valeur de fonctionnement actuelle
 
-        # 初始化
+        # Initialisation
         self.init()
 
     def init(self):
         """
-        初始化
+        Initialisation
         :return: None
         """
         if not os.path.isdir(self.tmpDir):
             os.mkdir(self.tmpDir)
 
         self.__wdb = WaveDromDB()
-        self.__render_dispatch(full_render=True)  # 完全渲染
+        self.__render_dispatch(full_render=True)  # Rendu complet
         self.lastNameLen = self.__wdb.nameLen
 
     def write_wave(self, x, y, val):
         """
-        写值到 wave
-        :param x: 列索引
-        :param y: 行索引
-        :param val: 写入值
+        Ecriture de la valeur dans une wave
+        :param x: Indice de colonne
+        :param y: Indice de ligne
+        :param val: Valeur à écrire
         :return: None
         """
         # print(self.__wdb.read(typ='signal', k='wave', y=y))
         self.__wdb.write(typ='signal', k='wave', x=x, y=y, val=val)
-        # if val in self.__wdb.special:  # 写入为 bus 时，将创建 data
+        # if val in self.__wdb.special:  # Lors de l'écriture sur le bus, des 'data' seront créées
         #     self.write_data(x=x, y=y, val='0')
         # print(self.readAll())
         # print(self.__wdb.read(typ='signal', k='wave', y=y))
 
     def delay_wave(self, x, y, num=1):
         """
-        将波形延迟num拍
-        :param x: 行号
-        :param y: 列号
-        :param num: 延迟拍数,为1时，可以展宽信号，大于1时，信号将整体延迟num
+        Retarder la forme d'onde de num battements
+        :param x: Numéro de ligne
+        :param y: Numéro de colonne
+        :param num: Le nombre de battements de retard, quand il est 1, le signal peut être élargi, et quand il est supérieur à 1, le signal sera retardé de 'num' dans son ensemble
         :return: None
         """
         self.__wdb.record()
@@ -67,7 +67,7 @@ class WaveDromCtrl:
             self.__wdb.write(typ='signal', k='wave', x=x, y=y, val='.', insert_mode=True)
         else:
             for i in range(num):
-                # 弹出最后一个后再插入，确保总长度不变
+                # Sortez le dernier puis insérez-le pour vous assurer que la longueur totale reste la même
                 self.__wdb.read(typ='signal', k='wave', x=self.get_col_len(), y=y, pop_mode=True)
                 self.__wdb.write(typ='signal', k='wave', x=1, y=y, val='.', insert_mode=True)
         self.__lineChange.append(y)
@@ -75,10 +75,10 @@ class WaveDromCtrl:
 
     def early_wave(self, x, y, num=1):
         """
-        将波形延迟num拍
-        :param x: 行号
-        :param y: 列号
-        :param num: 提前拍数,为1时，可以展宽信号，大于1时，信号将整体提前num
+        Retarder la forme d'onde de 'num' battements
+        :param x: Numéro de ligne
+        :param y: Numéro de colonne
+        :param num: Le nombre de battements à l'avance, lorsqu'il est de 1, le signal peut être élargi, lorsqu'il est supérieur à 1, le signal sera avancé de 'num' dans son ensemble
         :return: None
         """
         self.__wdb.record()
@@ -98,10 +98,10 @@ class WaveDromCtrl:
 
     def write_data(self, x, y, val):
         """
-        写入值到 data
-        :param x: 列索引
-        :param y: 行索引
-        :param val: 写入值
+        Ecriture de la valeur dans les 'data'
+        :param x: Numéro de ligne
+        :param y: Numéro de colonne
+        :param val: Valeur à écrire
         :return: None
         """
         wave = self.__wdb.read(typ='signal', k='wave', y=y)
@@ -109,37 +109,37 @@ class WaveDromCtrl:
             data = self.__wdb.read(typ='signal', k='data', y=y).split(' ')
         except KeyError:
             data = []
-        # 找到可设置 data 的索引
+        # Trouver l'index auquel les 'data' peuvent être définies
         idx = [i for i in range(self.get_col_len()) if wave[i] in self.__wdb.special]
-        # 记录 ’=‘ 的数据量
+        # Enregistrez la quantité de données pour '='
         num = len(idx)
-        # 当 ’=‘ 数量不等于 data 时，增加 '0'
+        # Lorsque le montant '=' n'est pas égal aux 'data', ajoutez '0'
         # if not len(data) == num:
         #     data.append('0')
-        # 找到 x 前最近的索引
+        # Trouver l'index le plus proche avant x
         index = [i for i in range(x, -1, -1) if i in idx]
-        if index:  # 当前有 '=' 时，才允许写入
+        if index:  # L'écriture n'est autorisée que lorsqu'il y a un '=' courant
             i = idx.index(index.pop(0))
             # print(self.readAll())
             try:
                 data[i] = val
             except IndexError:
                 data.append(val)
-        # 写回
+        # Réponse
         self.__wdb.write(typ='signal', k='data', y=y, val=' '.join(data))
 
     def read_data(self, x, y):
         """
-        读取 data
-        :param x: 列索引
-        :param y: 行索引
+        Lecture 'data'
+        :param x: Numéro de ligne
+        :param y: Numéro de colonne
         :return: str
         """
         wave = self.__wdb.read(typ='signal', k='wave', y=y)
         data = self.__wdb.read(typ='signal', k='data', y=y).split(' ')
-        # 找到可设置 data 的索引
+        # Trouver l'index auquel les 'data' peuvent être définies
         idx = [i for i in range(self.get_col_len()) if wave[i] in self.__wdb.special]
-        # 找到 x 前最近的索引
+        # Trouver l'index le plus proche avant x
         idx = idx.index([i for i in range(x, -1, -1) if i in idx].pop(0))
         try:
             return data[idx]
@@ -148,36 +148,36 @@ class WaveDromCtrl:
 
     def read_wave(self, x, y):
         """
-        读取 wave
-        :param x: 列索引
-        :param y: 行索引
+        Lecture 'wave'
+        :param x: Numéro de ligne
+        :param y: Numéro de colonne
         :return: str
         """
         return self.__wdb.read(typ='signal', k='wave', x=x, y=y)
 
     def write_name(self, y, val):
         """
-        写值到 name
-        :param y: 行索引
-        :param val: 写入值
+        Ecrire de la valeur dans 'name'
+        :param y: Numéro de colonne
+        :param val: Valeur à écrire
         :return: None
         """
         self.__wdb.write(typ='signal', k='name', y=y, val=val)
 
     def read_name(self, y):
         """
-        读取 name
-        :param y: 行索引
+        Ecriture 'name'
+        :param y: Numéro de colonne
         :return: None
         """
         return self.__wdb.read(typ='signal', k='name', y=y)
 
-    # 写1个 node值
+    # Ecrire une valeur de 'node'
     def write_node(self, x, y, val):
         """
-        写入值到 node
-        :param x: 列索引
-        :param y: 行索引
+        Ecriture 'node'
+        :param x: Numéro de ligne
+        :param y: Numéro de colonne
         :param val: 写入值
         :return: None
         """
@@ -185,9 +185,9 @@ class WaveDromCtrl:
 
     def read_node(self, y, x=None):
         """
-        读取 node
-        :param y: 行索引
-        :param x: 列索引，为 None 时读取整行
+        Lecture 'node'
+        :param x: Numéro de ligne
+        :param y: Numéro de colonne，lire toute la ligne lorsque 'None'
         :return: str
         """
         ret = self.__wdb.read(typ='signal', k='node', y=y, x=x)
@@ -195,75 +195,75 @@ class WaveDromCtrl:
 
     def read_edge(self):
         """
-        读取 edge
+        Lecture 'edge'
         :return: str
         """
         return self.__wdb.read(typ='edge')
 
     def write_edge(self, val):
         """
-        写入值到 edge
-        :param val: 写入值
+        Ecriture 'edge'
+        :param val: Valeur à écrire
         :return: None
         """
         self.__wdb.write(typ='edge', val=val)
-        self.__render_dispatch(full_render=True)  # 完全渲染
+        self.__render_dispatch(full_render=True)  # Compte rendu
 
     def read_all(self):
         """
-        读取整个数据库
+        Lecture de toute la base de données
         :return: dict
         """
         return self.__wdb.read_all()
 
     def get_col_len(self):
         """
-        获取列数
+        Obtenir le nombre de colonnes
         :return: int
         """
         return self.__wdb.colLen
 
     def get_row_len(self):
         """
-        获取行数
+        Obtenir le nombre de lignes
         :return: int
         """
         return self.__wdb.rowLen
 
     def get_name_len(self):
         """
-        获取名字长度
+        Obtenir la longueur du nom
         :return: int
         """
         return self.__wdb.nameLen
 
     def set_scale_ratio(self, val):
         """
-        设置缩放比例值
-        :param val: int, 比例数
+        Définir la valeur de mise à l'échelle
+        :param val: int, Nombre proportionnel
         :return: None
         """
         self.__wdb.record()
 
         self.__wdb.write(typ='config', k='hscale', val=val)
-        self.__render_dispatch(full_render=True)  # 完全渲染
+        self.__render_dispatch(full_render=True)  # Compte rendu
 
     def set_skin(self, skin):
         """
-        设置波形皮肤
-        :param skin: str，皮肤名
+        Définir de l'apparence de la forme d'onde
+        :param skin: str，Nom de l'apparence
         :return: None
         """
         self.__wdb.record()
 
         self.__wdb.write(typ='config', k='skin', val=skin)
-        self.__render_dispatch(full_render=True)  # 完全渲染
+        self.__render_dispatch(full_render=True)  # Compte rendu
 
     def set_phase(self, y, val):
         """
-        设置相位
-        :param y: 行索引
-        :param val: 设置值
+        Définition de la phase
+        :param y: Numéro de colonne
+        :param val: Valeur à écrire
         :return: None
         """
         self.__wdb.record()
@@ -272,7 +272,7 @@ class WaveDromCtrl:
 
     def get_phase(self, y):
         """
-        获取相位
+        Obtenir la phase
         :param y: 行索引
         :return: int
         """
@@ -280,9 +280,9 @@ class WaveDromCtrl:
 
     def set_period(self, y, val):
         """
-        设置周期
-        :param y: 行索引
-        :param val: int 周期值
+        Définition du cycle
+        :param y: Indice de ligne
+        :param val: int Valeur de période
         :return: None
         """
         self.__wdb.record()
@@ -290,17 +290,17 @@ class WaveDromCtrl:
 
     def get_period(self, y):
         """
-        获取周期
-        :param y: 行索引
+        Obtenir la période
+        :param y: Indice de ligne
         :return: int
         """
         return self.__wdb.read(typ='signal', k='period', y=y)
 
     def sig_mode(self, x, y, b1_motion=False):
         """
-        单比特信号模式，触发时若当前值是0则写入1，若为1则写入0
-        :param x: 列索引
-        :param y: 行索引
+        Mode de signal à bit unique, si la valeur actuelle est 0 lors du déclenchement, écrivez 1, si c'est 1, écrivez 0
+        :param x: Numéro de ligne
+        :param y: Numéro de colonne
         :param b1_motion: 安装b1拖动，按住b1拖动时将连续写入
         :return: None
         """
@@ -318,9 +318,9 @@ class WaveDromCtrl:
 
     def clk_mode(self, x, y):
         """
-        时钟模式
-        :param x: 行索引
-        :param y: 列索引
+        Mode 'clk' (horloge)
+        :param x: Indice de ligne
+        :param y: Indice de colonne
         :return: None
         """
         self.__wdb.record()
@@ -328,7 +328,7 @@ class WaveDromCtrl:
         if x == -1 or x > (self.get_col_len() - 1):
             return
         cur_val = self.read_wave(x=x, y=y)
-        # 值状态切换 p -> P -> n -> N
+        # Basculement de l'état de la valeur p -> P -> n -> N
         if cur_val == 'p':
             self.write_wave(x=x, y=y, val='P')
         elif cur_val == 'P':
@@ -340,7 +340,7 @@ class WaveDromCtrl:
         else:
             self.write_wave(x=x, y=y, val='p')
 
-        # 当前行所有点都将变为 ‘.’
+        # Tous les points de la ligne courante deviendront '.'
         for i in range(x + 1, self.__wdb.colLen):
             self.write_wave(x=i, y=y, val='.')
 
@@ -349,10 +349,10 @@ class WaveDromCtrl:
 
     def bus_mode(self, x, y, val='='):
         """
-        总线模式(多比特信号)
-        :param 列索引:
-        :param 行索引:
-        :param 写入值:
+        Mode bus (signal multibit)
+        :param x: Indice de colonne
+        :param y: Indice de ligne
+        :param val: Valeur à écrire
         :return: None
         """
         self.__wdb.record()
@@ -368,9 +368,9 @@ class WaveDromCtrl:
 
     def x_mode(self, x, y):
         """
-        x模式处（产生不定态）
-        :param x: 列索引
-        :param y: 行索引
+        Mode x (produit un état indéterminé)
+        :param x: Indice de colonne
+        :param y: Indice de ligne
         :return: None
         """
         self.__wdb.record()
@@ -387,9 +387,9 @@ class WaveDromCtrl:
 
     def z_mode(self, x, y):
         """
-        z模式处（产生高阻态）
-        :param x: 列索引
-        :param y: 行索引
+        Mode z (résultant en un état à haute impédance)
+        :param x: Indice de colonne
+        :param y: Indice de ligne
         :return: None
         """
         self.__wdb.record()
@@ -406,9 +406,9 @@ class WaveDromCtrl:
 
     def gap_mode(self, x, y):
         """
-        gap模式处(插入|)
-        :param x: 行索引
-        :param y: 列索引
+        Mode 'gap' (insérer |)
+        :param x: Indice de ligne
+        :param y: Indice de colonne
         :return: None
         """
         self.__wdb.record()
@@ -425,23 +425,23 @@ class WaveDromCtrl:
 
     def t_mode(self, x, y, val, node_mode=None):
         """
-        文本模式
-        :param x: 列索引
-        :param y: 行索引
-        :param val: 写入值
-        :param node_mode: 节点模式，写入值为 node
+        Mode texte
+        :param x: Indice de colonne
+        :param y: Indice de ligne
+        :param val: Valeur à écrire
+        :param node_mode: Mode node, la valeur d'écriture est le 'node'
         :return: None
         """
         self.__wdb.record()
 
-        if x == -1:  # 编辑名字
+        if x == -1:  # Modifier le nom
             self.write_name(y=y, val=val)
-        elif node_mode:  # edit node
+        elif node_mode:  # Editer node
             self.write_node(x=x, y=y, val=val)
-        else:  # 编辑数据
+        else:  # Modifier les données
             self.write_data(x=x, y=y, val=val)
 
-        # 当信号名长度变化超过2时，全内容重新渲染
+        # Lorsque la longueur du nom du signal change de plus de 2, le contenu complet est restitué
         if abs(self.__wdb.nameLen - self.lastNameLen) > 0:
             self.__lineChange.append((0, self.__wdb.rowLen))
             self.lastNameLen = self.__wdb.nameLen
@@ -451,8 +451,8 @@ class WaveDromCtrl:
 
     def add_row(self, num):
         """
-        在行尾增加行
-        :param num: 增加行数
+        Ajoute une ligne en fin de ligne
+        :param num: Augmente le nombre de lignes
         :return: None
         """
         self.__wdb.record()
@@ -464,8 +464,8 @@ class WaveDromCtrl:
 
     def add_col(self, num):
         """
-        在列尾增加列
-        :param num: 增加列数
+        Ajoute une colonne en fin de colonne
+        :param num: Augmente le nombre de colonnes
         :return: None
         """
         self.__wdb.record()
@@ -476,33 +476,38 @@ class WaveDromCtrl:
 
     def del_row(self, y):
         """
-        删除指定行
-        :param y: 指定行索引
+        Suppression de la ligne spécifiée
+        :param y: Index de ligne
         :return: None
         """
         self.__wdb.record()
-
-        self.__wdb.del_row(typ='signal', y=y)
-        self.__render_dispatch(full_render=True)
+        if (self.get_row_len() > 1):
+            self.__wdb.del_row(typ='signal', y=y)
+            self.__render_dispatch(full_render=True)
+        else:
+            self.clear(y)
         self.__update()
 
     def del_col(self, x):
         """
-        删除指定列
-        :param x: 列索引
+        Suppression la colonne spécifiée
+        :param x: Indince de colonne
         :return: None
         """
         self.__wdb.record()
 
-        self.__wdb.del_col(typ='signal', x=x)
-        self.__render_dispatch(full_render=True)
+        if (self.get_col_len() > 1):
+            self.__wdb.del_col(typ='signal', x=x)
+            self.__render_dispatch(full_render=True)
+        else:
+            self.clear(x)
         self.__update()
 
     def swap_line(self, src, dst):
         """
-        将 src 行与 dst 行交换
-        :param src: source 行索引
-        :param dst: destination 行索引
+        Échange la ligne src avec la ligne dst
+        :param src: source -> indice de ligne
+        :param dst: destination -> indice de ligne
         :return: None
         """
         self.__wdb.record()
@@ -512,9 +517,9 @@ class WaveDromCtrl:
 
     def copy_line(self, src, dst):
         """
-        复制行，将 src 行内容复制到 dst 位置
-        :param src: source 行
-        :param dst: destination 行
+        copier la ligne, copier le contenu de la ligne 'src' à l'emplacement 'dst'
+        :param src: source -> Ligne
+        :param dst: destination -> Ligne
         :return: None
         """
         self.__wdb.record()
@@ -524,13 +529,13 @@ class WaveDromCtrl:
 
     def clear(self, y):
         """
-        清除指定行所有数据，不删除行
-        :param y: 行索引
+        Effacement de toutes les données de la ligne spécifiée sans supprimer la ligne
+        :param y: Indice de ligne
         :return: None
         """
         self.__wdb.record()
 
-        # 当清除行信号名称为最大name_len时，进行全局渲染
+        # Rendu global lorsque le nom du signal de ligne clair est max name_len
         name_len = len(self.read_name(y))
 
         val = '.' * self.__wdb.colLen
@@ -547,7 +552,7 @@ class WaveDromCtrl:
 
     def __update(self):
         """
-        若有行更新，将调用渲染器渲染图片
+        S'il y a une mise à jour de ligne, le moteur de rendu sera appelé pour rendre l'image
         :return:
         """
         if len(self.__lineChange) > 0:
@@ -555,8 +560,8 @@ class WaveDromCtrl:
 
     def save(self, handle):
         """
-        保存
-        :param handle: 文件句柄，根据句柄后缀决定保存类型
+        Enregistrer fichier
+        :param handle: Descripteur de fichier, le type de sauvegarde est déterminé en fonction du suffixe du descripteur
         :return: None
         """
         out = self.__wdb.read_all()
@@ -575,7 +580,7 @@ class WaveDromCtrl:
 
     def restore(self, filename):
         """
-        恢复数据
+        Récupération de données
         :param filename: 存档文件位置
         :return: None
         """
@@ -588,8 +593,8 @@ class WaveDromCtrl:
 
     def restore_json(self, json_db):
         """
-        将 json db 渲染为波形，由编辑器调用，实现文本编辑后渲染
-        :param json_db: 波形 dict
+        Rendre json db en tant que forme d'onde, appelée par l'éditeur, pour obtenir le rendu après l'édition de texte
+        :param json_db: Forme d'onde 'dict'
         :return: None
         """
         self.init()
@@ -599,8 +604,8 @@ class WaveDromCtrl:
 
     def renderLine(self, lineList):
         """
-        渲染指定行，供外部调用
-        :param lineList: list，待渲染行索引
+        Affichage de la ligne spécifiée pour les appels externes
+        :param lineList: list，Index de ligne à rendre
         :return: None
         """
         self.__lineChange = lineList
@@ -608,93 +613,96 @@ class WaveDromCtrl:
 
     def __render(self, dic, fname):
         """
-        渲染器，pywavedrom 生成 svg 文件后，使用 cairosvg 转换为 png
+        Rendu, après que pywavedrom génère un fichier svg, utilisez cairosvg pour convertir en png
         :param dic: wavedrom dict
-        :param fname: 生成文件名
+        :param fname: Génére le nom du fichier
         :return: None
         """
         svg = str(dic)
-        wavedrom.render(svg).saveas(fname + ".svg")
+        try:
+            wavedrom.render(svg).saveas(fname + ".svg")
+        except:
+            print("Catch exception: Veuillez lancer le rendu WaveNote.")
         # print(svg)
         # convert svg to png
         from_img = fname + ".svg"
         to_img = fname + '.png'
         cairosvg.svg2png(url=from_img, write_to=to_img)
 
-    # 渲染分配器，分割数据，无更新内容的将不渲染
-    # fullRender: 全局渲染，从头至尾都渲染
+    # Allocateur de rendu, données fractionnées, aucun contenu de mise à jour ne sera rendu
+    # fullRender: Rendu global, rendu du début à la fin
     def __render_dispatch(self, full_render=False):
         """
-        渲染分配，根据列表 __lineChange 记录数据渲染图片，支持3种模式：
-            完全渲染：渲染所有行内容
-            合并渲染：待渲染行为连续行时（__lineChange 内容为 tuple），将把待渲染行一并渲染
-            单独渲染：待渲染行为单独行时（__lineChange 内容为 int），将单独渲染一行
-        渲染完成后结果保存至 self.imgDB
-        :param full_render: bool，True时将进入完全渲染模式
+        Allocation de rendu, rendu des images selon la liste __lineChange record data, prend en charge 3 modes :
+            -   Rendu complet : rend tout le contenu de la ligne
+            -   Rendu combiné : lorsque les lignes à rendre sont continues (le contenu de __lineChange est un tuple), les lignes à rendre seront rendues ensemble
+            -   Rendu séparé : lorsque la ligne à rendre est une seule ligne (le contenu de __lineChange est int), une seule ligne sera rendue
+        Une fois le rendu terminé, le résultat est enregistré dans self.imgDB
+        :param full_render: bool，True -> en mode rendu complet
         :return: None
         """
         st = time.time()
         self.imgDB.clear()
         array = self.read_all()['signal']
-        # 渲染时为防止不同长度信号名影响渲染结果，将在行首插入dummy行，待imgSplit分割后删除dummy行
+        # Afin d'éviter que des noms de signaux de différentes longueurs n'affectent les résultats du rendu pendant le rendu, une ligne 'dummy' sera insérée au début de la ligne et la ligne 'dummy' sera supprimée après imgSplit
         dummy = {"name": ("Q" * self.__wdb.nameLen)}
-        if full_render:  # 完全渲染
+        if full_render:  # Rendu complet
             db = self.read_all()
-            wave = db['signal'].copy()  # 重新映射句柄
+            wave = db['signal'].copy()  # Remappage
             wave.append(dummy)
             db['signal'] = wave
 
             fname = self.tmpDir + 'tmp0'
-            self.__render(dic=db, fname=fname)  # 执行渲染
-            sub_img_list = self.__img_split(fname + '.png')  # 分割图片
-            sub_img_list.pop(-1)  # 删除 dummy 行
+            self.__render(dic=db, fname=fname)  # Effectuer le rendu
+            sub_img_list = self.__img_split(fname + '.png')  # Image fractionnée
+            sub_img_list.pop(-1)  # supprimer la ligne 'dummy'
             for sub_idx in range(self.get_row_len()):
                 self.imgDB[sub_idx] = sub_img_list.pop(0)
         else:
             for i in self.__lineChange:
-                if type(i) == tuple:  # 合并渲染
-                    # 多行合并渲染时 i 是元组，如（1，10）分别代表开始行和结束行
+                if type(i) == tuple:  # Rendu combiné
+                    # i est un tuple lorsque plusieurs lignes sont fusionnées et rendues, telles que (1, 10) représentent respectivement la ligne de début et la ligne de fin
                     start_idx = i[0]
                     end_idx = i[1]
                     db = self.read_all()
                     db['signal'] = array[start_idx:end_idx] + [dummy]
                     fname = self.tmpDir + 'tmp%s' % start_idx
 
-                    self.__render(dic=db, fname=fname)  # 执行渲染
-                    sub_img_list = self.__img_split(fname + '.png')  # 分割图片
-                    sub_img_list.pop(-1)  # 删除 dummy 行
+                    self.__render(dic=db, fname=fname)  # Effectuer le rendu
+                    sub_img_list = self.__img_split(fname + '.png')  # Image fractionnée
+                    sub_img_list.pop(-1)  # Supprimer la ligne 'dummy'
                     for sub_idx in range(start_idx, end_idx):
                         self.imgDB[sub_idx] = sub_img_list.pop(0)
-                else:  # 单独渲染
-                    # 单行渲染时 i 是数字，如 1 代表当前渲染行
+                else:  # Rendu seul
+                    # i est un nombre lors du rendu d'une seule ligne, tel que 1 représente la ligne de rendu actuelle
                     db = self.read_all()
                     db['signal'] = [array[i], dummy]
                     fname = self.tmpDir + 'tmp%s' % i
-                    self.__render(dic=db, fname=fname)  # 执行渲染
-                    sub_img_list = self.__img_split(fname + '.png')  # 分割图片
-                    sub_img_list.pop(-1)  # 删除 dummy 行
+                    self.__render(dic=db, fname=fname)  # Effectuer le rendu
+                    sub_img_list = self.__img_split(fname + '.png')  # Image fractionnée
+                    sub_img_list.pop(-1)  # Supprimer la ligne 'dummy'
                     self.imgDB[i] = sub_img_list.pop(0)
 
-        print('操作行', self.__lineChange, '; 渲染时间 %.2fs' % (time.time() - st))
+        print('Ligne d\'opération', self.__lineChange, '; Temps de rendu %.2fs' % (time.time() - st))
         self.__lineChange = []
 
     def __img_split(self, fname):
         """
-        图片分割，将渲染完成的图片分割为单独1行图片
-        :param fname: 输入文件名
+        Segmentation d'image, qui divise l'image rendue en une seule rangée d'images
+        :param fname: Nom du fichier d'entrée
         :return: list
         """
         ret = []
         img = Image.open(fname)
         width, height = img.size
-        for i in range(height // self.stepy):  # 根据图片高度和 step 高分割图片
+        for i in range(height // self.stepy):  # Fractionner les images en fonction de la hauteur de l'image et de la hauteur du step
             cropped = img.crop((0, i * self.stepy, width, (i + 1) * self.stepy))  # (left, upper, right, lower)
             ret.append(cropped.copy())
         return ret
 
     def undo(self):
         """
-        撤销
+        Annulation
         :return: None
         """
         self.__wdb.undo()
@@ -703,7 +711,7 @@ class WaveDromCtrl:
 
     def redo(self):
         """
-        重做
+        Rétablissement
         :return: None
         """
         self.__wdb.redo()
@@ -712,14 +720,14 @@ class WaveDromCtrl:
 
     def get_history_len(self):
         """
-        获取undo/redo列表长度
-        :return:tuple，（undo列表长度，redo列表长度）
+        Obtenir la longueur de la liste d'annulation/rétablissement
+        :return:tuple，(longueur de la liste 'undo', longueur de la liste de 'reundo')
         """
         return self.__wdb.undoLen, self.__wdb.redoLen
 
     def to_ascii(self):
         """
-        将波形图转化为 ascii字符
+        Convertir la forme d'onde en caractères 'ascii'
         :return: str
         """
         wave = self.read_all()
