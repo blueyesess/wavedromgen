@@ -75,7 +75,7 @@ image::asset/md/ui_wave.png[waveview]
     - **t (text):** en mode t, cliquer sur le nom du signal ou la balise de bus permet de modifier la description.
     - **clr (clear):** en mode clr, cliquer sur la forme d'onde dans la zone de dessin effacera toutes les données concernant ce signal.
 
-=== WaveView
+=== EditorView
 
 image::asset/md/ui_editor.png[editorview]
 
