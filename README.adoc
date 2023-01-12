@@ -79,14 +79,14 @@ image::asset/md/ui_wave.png[waveview]
 
 image::asset/md/ui_editor.png[editorview]
 
-4. **Editor Toolbar**
-        - **render : ** fait un rendu du texte de l'éditeur pour générer une forme d'onde.
-        - **copie : ** copier ce que vous sélectionnez dans l'éditeur.
-        - **coller : ** coller le presse-papiers dans l'éditeur.
-        - **undo** : annuler la dernière opération dans l'éditeur.
-        - **redo** : rétablir la dernière opération dans l'éditeur.
-        - **trouver** : rechercher dans l'éditeur.
-5. **Editor: ** éditer du wavedrom dans la zone de texte, voir https://wavedrom.com/tutorial.html[_WaveDrom_] pour plus de détails.
+4. **EditorView Toolbar**
+        - **rendre : ** fait un rendu du texte de l'éditeur pour générer une forme d'onde.
+        - **copier : ** copier ce que vous sélectionnez dans l'éditeur.
+        - **coller : ** coller le presse-papiers dans l'éditeur.
+        - **annuler : ** annuler la dernière opération dans l'éditeur.
+        - **rétablir : ** rétablir la dernière opération dans l'éditeur.
+        - **trouver : ** rechercher dans l'éditeur.
+5. **Eiteur: ** éditer du wavedrom dans la zone de texte, voir https://wavedrom.com/tutorial.html[_WaveDrom_] pour plus de détails.
 
 === Demos
 
