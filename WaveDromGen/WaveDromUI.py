@@ -394,7 +394,7 @@ class WaveDromUI:
             Ouverture doc wavedromgen
             :return: None
             """
-            url = 'https://gitee.com/sjkpy/WaveDromGen'
+            url = 'https://github.com/Tamachiii/wavedromgen'
             import webbrowser
             webbrowser.open(url, new=0, autoraise=True)
 
