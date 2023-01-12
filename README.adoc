@@ -6,10 +6,10 @@ _WaveDromGen_ est une interface graphique pour générer des chronogrammes numé
 
 **Création**
 
-- dessiner des waveform dans l'interface graphique _WaveView_
-- coder des waveform en _Json_ dans l'éditeur de texte _EditorView_
+- dessiner des formes d'onde dans l'interface graphique _WaveView_
+- coder des formes d'onde en _Json_ dans l'éditeur de texte _EditorView_
 
-Ces deux view sont synchronisées.
+Ces deux interfaces sont synchronisées.
 
 **Rendus**
 
@@ -20,17 +20,17 @@ Ces deux view sont synchronisées.
 
 [source, wavejson]
 ----
-│  main.py                  # main entry
-│  package2exe.py           # package code to exe
-├─asset                     # image asset
+│  main.py                  # entrée principale
+│  package2exe.py           # empaqueter le code source en exécutable (.exe)
+├─asset                     # répertoire images
 └─WaveDromGen# 
-        language.py         # UI language dict
-        WavedromASCII.py    # wavedrom to ascii
-        WaveDromCtrl.py     # contoller
-        WaveDromDB.py       # datebase model
-        WaveDromUI.py       # UI top
-        WaveImageDB.py      # icon binary database, for package all into exe
-        WaveNote.py         # waveform editor in text
+        language.py         # dictionnaire de langage UI
+        WavedromASCII.py    # wavedrom vers ascii
+        WaveDromCtrl.py     # controleur
+        WaveDromDB.py       # model
+        WaveDromUI.py       # view (UI principale)
+        WaveImageDB.py      # base de données binaire des icônes, pour empaqueter tout en exécutable
+        WaveNote.py         # editeur de texte wavedrom
         __init__.py
 ----
 
@@ -54,41 +54,38 @@ Deux manières de l'installer
 
 image::asset/md/ui_wave.png[waveview]
 
-1. **Menu**: basic menu function
+1. **Menu**: barre de menu
 2. **View**:
-	- WaveView: draw waveform by clicking canvas.
-	- EditorView: draw waveform by coding text.
-	- AsciiView: can't edit,output ascii waveform in realtime.
+	- WaveView: dessiner une forme d'onde en cliquant sur la zone de dessn
+	- EditorView: dessiner une forme d'onde en codant du texte
+	- AsciiView: ne peut pas être éditée, sortie de forme d'onde ascii en temps réel.
 3. **Wave Toolbar**
-        - **clk (clock):** in clk mode, clicking on the canvas will draw clock waveform. Clicking same position more than one time will adjust clock sensitive as below: **high level -> pos edge -> low level -> neg edge**.
-        - **sig (single-bit signal):** in sig mode, clicking on the canvas will draw single bit low . Click same position again to go high.
-        - **bus (muti-bit signal):** in bus mode, clicking on the canvas will draw bus tag. Click same position again to cancel.
-        - **x (no care signal):** in x mode, clicking on the canvas will draw x tag. Click same position again to cancel.
-        - **z (high impedance):** in bus mode, clicking on the canvas will draw z tag. Click same position again to cancel.
-        - **sel (select):** in sel mode, there are 4 usages according click position.
-                * 1. Clicking on non-waveform zone on the canvas will add the number of rows and columns. 
-                * 2. Dragging the waveform up or down will adjust the row index.
-                * 3. Holding down CTRL while dragging a waveform up or down will copy the corresponding waveform.
-                * 4. Dragging the waveform left and right will move the waveform laterally.
-    - **t (text):** in t mode, clicking signal name or bus tag could edit description.
-    - **clr (clear):** in clr mode, clicking waveform on canvas will clear all data about this signal.
-
-_documentation faite par https://github.com/blueyesess/wavedromgen/commits?author=blueyesess[blueyesess]_
+        - **clk (clock):** en mode clk, cliquer sur la zone de dessin dessinera la forme d'onde de l'horloge. Cliquer sur la même position plus d'une fois ajustera la sensibilité de l'horloge comme ci-dessous: **high level -> pos edge -> low level -> neg edge**.
+        - **sig (single-bit signal):** en mode sig, cliquer sur la zone de dessin dessinera un seul bit bas. Cliquer à nouveau sur la même position pour monter haut.
+        - **bus (muti-bit signal):** en mode bus, cliquer sur le zone de dessin dessinera la balise bus. Cliquer à nouveau sur la même position pour annuler.
+        - **x (no care signal):** en mode x, cliquer sur la zone de dessin dessinera le tag x. Cliquer à nouveau sur la même position pour annuler.
+        - **gap (no care signal):** en mode gap, cliquer sur la zone de dessin dessinera un espace. Cliquer à nouveau sur la même position pour annuler.
+        - **z (high impedance):** en mode z, cliquer sur la zone de dessin dessinera le tag z. Cliquer à nouveau sur la même position pour annuler.
+        - **sel (select):** en mode sel, il y a 4 usages selon la position du clic.
+                * 1. Cliquer sur une zone sans forme d'onde sur le canevas ajoutera le nombre de lignes et de colonnes.
+                * 2. Faire glisser la forme d'onde vers le haut ou vers le bas ajustera l'index de ligne.
+                * 3. Maintenir CTRL enfoncé tout en faisant glisser une forme d'onde vers le haut ou vers le bas copiera la forme d'onde correspondante.
+                * 4. Faire glisser la forme d'onde vers la gauche et vers la droite déplacera la forme d'onde latéralement.
+    - **t (text):** en mode t, cliquer sur le nom du signal ou la balise de bus permet de modifier la description.
+    - **clr (clear):** en mode clr, cliquer sur la forme d'onde dans la zone de dessin effacera toutes les données concernant ce signal.
 
 === WaveView
 
 image::asset/md/ui_editor.png[editorview]
 
 4. **Editor Toolbar**
-        - **render: ** render the editor text to generate waveform.
-        - **copy: ** copy what select in editor.
-        - **paste: ** paste clipboard in editor.
-        - **undo**: undo last operation in editor.
-        - **redo**: redo last operation in editor.
-        - **find**: find in editor.
-5. **Editor: ** edit wavedrom in text, see https://wavedrom.com/tutorial.html[_WaveDrom_] for details.
-
-_documentation faite par https://github.com/blueyesess/wavedromgen/commits?author=blueyesess[blueyesess]_
+        - **render : ** fait un rendu du texte de l'éditeur pour générer une forme d'onde.
+        - **copie : ** copier ce que vous sélectionnez dans l'éditeur.
+        - **coller : ** coller le presse-papiers dans l'éditeur.
+        - **undo** : annuler la dernière opération dans l'éditeur.
+        - **redo** : rétablir la dernière opération dans l'éditeur.
+        - **trouver** : rechercher dans l'éditeur.
+5. **Editor: ** éditer du wavedrom dans la zone de texte, voir https://wavedrom.com/tutorial.html[_WaveDrom_] pour plus de détails.
 
 === Demos
 
