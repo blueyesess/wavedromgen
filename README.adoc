@@ -40,13 +40,14 @@ image::asset/md/struct_en.png[structure]
 
 Deux manières de l'installer
 
-**1er façon**: https://github.com/Tamachiii/WaveDromGen/releases/[Download the release version], puis lancer l'exécutable（utilisable que sur Windows）.
+**1**: https://github.com/Tamachiii/WaveDromGen/releases/[Download the release version], puis lancer l'exécutable (utilisable que sur Windows).
 
 
-**2ème façon**: Télécharget le code source Python:
-        1. git clone https://github.com/Tamachiii/WaveDromGen.git
-        2. pip install -r requirement
-        3. python main.py
+**2**: Télécharger le code source Python:
+
+        - 1. git clone https://github.com/Tamachiii/WaveDromGen.git
+        - 2. pip install -r requirement
+        - 3. python main.py
 
 == Utilisation
 
@@ -106,8 +107,8 @@ image::asset/md/ui_relation.gif[gif relation]
 - Ajout de raccourcis
 - Ajout attributs lenRow/lenCol pour la barre de statue
 - Ajout barre de défilement dans WaveEditor
-- Ajout d'un panneau de gestion des relations
-- Ajout d'un panneau de gestion des périodes et phases
+- Ajout d'un panneau de gestion des relations (relation_view)
+- Ajout d'un panneau de gestion des périodes et phases (period_view)
 
 **Modifications**
 
