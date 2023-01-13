@@ -335,7 +335,7 @@ image::includes/images/ui_wave.png[waveview]
 
 1. **Menu**: barre de menu
 2. **View**:
-	- WaveView: dessiner une forme d'onde en cliquant sur la zone de dessn
+	- WaveView: dessiner une forme d'onde en cliquant sur la zone de dessin
 	- EditorView: dessiner une forme d'onde en codant du texte
 	- AsciiView: ne peut pas être éditée, sortie de forme d'onde ascii en temps réel.
 3. **Wave Toolbar**
