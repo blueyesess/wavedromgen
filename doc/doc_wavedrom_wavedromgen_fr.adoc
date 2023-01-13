@@ -1,4 +1,4 @@
-= Documentation logicielle : WaveDrom
+= Documentation logicielle : WaveDrom & WaveDromGen
 
 Tony Nguyen
 v1.2, 2023-01-13
