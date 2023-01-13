@@ -133,6 +133,6 @@ image::asset/md/ui_relation.gif[gif relation]
 - Fonction du curseur dans img_view
         * Permet au curseur de s'adapter en fonction de la dimension du canva
 - Suppression des relations après le mode delRow
-        * Modèle modifié (fichier ./WaveDromDB.py) : lorsque qu'une ligne qui contient des edges/relations est supprimée alors les relations en rapport avec ses edges sont supprimés eux aussi
+        * Modèle modifié (fichier ./WaveDromDB.py) : lorsque qu'une ligne qui contient des edges/relations est supprimée alors les relations en rapport avec ses noeuds sont supprimés eux aussi
 - Fonction Annoter "edge"
         * Permet de vérifier la valeur entrée lors de la saisie du nom d'un edge
