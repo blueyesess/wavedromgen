@@ -7,7 +7,7 @@ v1.2, 2023-01-13
 :toclevels: 4
 :toc-title: Sommaire
 
-== Introduction
+== Introduction à WaveDrom
 
 === Qu'est-ce que WaveDrom ?
 
