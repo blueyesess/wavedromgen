@@ -5,7 +5,7 @@ import base64
 import os.path
 
 
-# 用于存放图片二进制文件库，便于打包exe
+# Il est utilisé pour stocker la bibliothèque de fichiers binaires d'image, ce qui est pratique pour empaqueter les exe
 class WaveImageDB:
     def __init__(self, outdir):
         self.outdir = outdir
@@ -41,7 +41,7 @@ class WaveImageDB:
 
     def __setup(self):
         """
-        将二进制图片库还原为图片
+        Rétablir la bibliothèque d'images binaires en image
         """
         for filename, code in self.__imgDB.items():
             if os.path.isfile(self.outdir + filename):
@@ -53,8 +53,8 @@ class WaveImageDB:
 
 def pic2py(picture_names, py_name):
     """
-    将图像文件转换为py文件
-    :param picture_names: 转换后py文件名
+    Convertir un fichier image en fichier py
+    :param picture_names: Nom du fichier py après conversion
     :return: None
     """
     write_data = []
@@ -63,7 +63,7 @@ def pic2py(picture_names, py_name):
         open_pic = open("%s" % picture_name, 'rb')
         b64str = base64.b64encode(open_pic.read())
         open_pic.close()
-        # 注意这边b64str一定要加上.decode()
+        # Notez que b64str doit être ajouté avec .decode()
         write_data.append('"%s",' % (b64str.decode()))
 
     f = open('%s.py' % py_name, 'w+')
@@ -74,5 +74,5 @@ def pic2py(picture_names, py_name):
 
 if __name__ == '__main__':
     pics = ["../asset/sel.gif"]
-    pic2py(pics, 'memory_pic')  # 将pics里面的图片写到 memory_pic.py 中
+    pic2py(pics, 'memory_pic')  # Écrivez les images dans pics à memory_pic.py
     print("ok")
