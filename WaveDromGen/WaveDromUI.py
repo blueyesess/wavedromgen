@@ -53,7 +53,9 @@ class WaveDromUI:
         root.resizable(width=False, height=False)
         self.isResized = False
         # Icônes
-        root.iconbitmap(self.asset_dir + 'app.ico')
+        image = Image.open(self.asset_dir + 'app.ico')
+        photo = ImageTk.PhotoImage(image)
+        root.iconphoto(True, photo)
 
         # UI Variables globales
         self.root = root  # Fenêtre principale
@@ -414,7 +416,9 @@ class WaveDromUI:
             # Créer une fenêtre contextuelle
             top = Toplevel(background='white')
             top.title(self.lang('about'))
-            top.iconbitmap(self.asset_dir + 'app.ico')
+            image = Image.open(self.asset_dir + 'app.ico')
+            photo = ImageTk.PhotoImage(image)
+            top.iconphoto(True, photo)
             screenwidth = root.winfo_screenwidth()
             screenheight = root.winfo_screenheight()
             width, height = 300, 300
@@ -839,7 +843,7 @@ class WaveDromUI:
         button_view_root = Frame(root, bg='white')
         button_view_root.pack(side=LEFT, fill=Y, padx=2)
 
-        items = ['clk', 'sig', 'bus', 'x', 'gap', 'z', 'SEL', 't', 'clr']
+        items = ['clk', 'sig', 'bus', 'x', 'gap', 'z', 'sel', 't', 'clr']
 
         # Étiquette vierge, utilisée comme espace réservé
         Label(button_view_root, bg='white', height=1).pack()
