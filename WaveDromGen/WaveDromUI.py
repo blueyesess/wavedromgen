@@ -53,7 +53,9 @@ class WaveDromUI:
         root.resizable(width=False, height=False)
         self.isResized = False
         # Icônes
-        root.iconbitmap(self.asset_dir + 'app.ico')
+        image = Image.open(self.asset_dir + 'app.ico')
+        photo = ImageTk.PhotoImage(image)
+        root.iconphoto(True, photo)
 
         # UI Variables globales
         self.root = root  # Fenêtre principale
