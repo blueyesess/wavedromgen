@@ -112,11 +112,10 @@
   let speed = 0;
   let bothUpT = 0;
   let obstacles = [];
-  let coins = [];
-  let arches = [];
   let props = [];
   let particles = [];
   let score = 0;
+  let scoreAcc = 0;
   let best = 0;
   let fallT = 0;
   let overAt = 0;
@@ -141,11 +140,6 @@
   let curve = null;
   let curveAmt = 0;
   let nextCurveAt = 170;
-
-  // 分岔
-  let fork = null;
-  let buff = null;
-  let nextForkAt = 250;
 
   // 节奏
   let beatAcc = 0;
@@ -187,10 +181,7 @@
 
   function sfxStep(side) { blip(side === 0 ? 220 : 165, 0.06, 'square', 0.35); }
   function sfxPass() { blip(520, 0.035, 'square', 0.14); }
-  function sfxCoin() { blip(720, 0.06, 'square', 0.32); blip(1080, 0.07, 'square', 0.2, null, 0.05); }
-  function sfxBox() { blip(300, 0.05, 'triangle', 0.3); blip(450, 0.06, 'triangle', 0.22, null, 0.04); }
   function sfxDash() { blip(180, 0.18, 'sawtooth', 0.28, 620); }
-  function sfxRoute(good) { blip(good ? 640 : 420, 0.1, 'square', 0.26); blip(good ? 960 : 560, 0.12, 'square', 0.18, null, 0.08); }
   function sfxTick() { blip(90, 0.02, 'square', 0.05); }
   function sfxFall() {
     blip(190, 0.28, 'sawtooth', 0.5, 60);
@@ -242,15 +233,12 @@
     };
   }
 
-  /* ---------------- 分数 / 连击 / 增益 ---------------- */
+  /* ---------------- 分数 / 连击 ---------------- */
   function mult() { return Math.min(4, 1 + Math.floor(combo / 10)); }
-  function buffMul() { return buff && buff.type === 'obs' ? 2 : 1; }
-  function coinMul() { return buff && buff.type === 'coin' ? 2 : 1; }
   function setScore(n) {
     score = n;
     hud.textContent = String(score);
   }
-  function addScore(base) { setScore(score + base * mult()); }
 
   /* ---------------- 游戏流程 ---------------- */
   function resetProps() {
@@ -271,8 +259,6 @@
     speed = 0;
     bothUpT = -1;
     obstacles = [];
-    coins = [];
-    arches = [];
     particles = [];
     fallCause = '';
     balance = 0;
@@ -285,9 +271,6 @@
     curve = null;
     curveAmt = 0;
     nextCurveAt = 170;
-    fork = null;
-    buff = null;
-    nextForkAt = 250;
     beatAcc = 0;
     beatPulse = 0;
     beatCountdown = 2.5;
@@ -296,10 +279,10 @@
     bobY = 0;
     feet.forEach((f) => { f.sources.clear(); f.bob = 0; f.down = false; });
     resetProps();
+    scoreAcc = 0;
     setScore(0);
     // 开局给一组目标，避免前几秒空跑
     addObstacle(randLane(), 95);
-    addCoin(randLane(), 62);
   }
 
   function toPlaying() {
@@ -378,31 +361,18 @@
     obstacles.push({ lane: lane, z: z, type: t.type, wf: t.wf, hf: t.hf });
   }
 
-  // 可踩矮箱：踩上或跨过都安全
-  function addStepBox(lane, z) {
-    obstacles.push({ lane: lane, z: z, type: 'stepbox', wf: 1.5, hf: 0.55 });
-  }
-
   // 弯道内侧路缘：必须抬脚
   function addCurb(lane, z) {
     obstacles.push({ lane: lane, z: z, type: 'curb', wf: 1.9, hf: 0.46 });
   }
 
-  function addCoin(lane, z) {
-    coins.push({ lane: lane, z: z, missed: false });
-  }
-
   function startCurve() {
     curve = { side: randLane(), t: 0, dur: 6 };
     const l = curve.side;
+    // 间隔拉开，保证两次抬脚之间有足够时间双脚回落失衡
     addCurb(l, Z_FAR);
-    addCurb(l, Z_FAR + 26);
-    addCurb(l, Z_FAR + 54);
-  }
-
-  function startFork() {
-    fork = { chosen: null };
-    arches = [{ lane: 0, z: Z_FAR }, { lane: 1, z: Z_FAR }];
+    addCurb(l, Z_FAR + 65);
+    addCurb(l, Z_FAR + 130);
   }
 
   function spawnBeat() {
@@ -410,30 +380,23 @@
     const gap = Math.max(20, speed * BEAT * 1.1);
     const r = Math.random();
 
-    if (score < 4) {
-      if (r < 0.6) addObstacle(randLane(), z);
-      else addCoin(randLane(), z);
+    if (dist < 60) {
+      addObstacle(randLane(), z);
       return;
     }
 
-    if (r < 0.13) {
-      const l = randLane();
-      addStepBox(l, z);
-      if (Math.random() < 0.5) addCoin(l, z + gap * 0.5);
-    } else if (r < 0.43) {
+    if (r < 0.46) {
       addObstacle(randLane(), z);
-    } else if (r < 0.64) {
+    } else if (r < 0.72) {
       const a = randLane();
       addObstacle(a, z);
-      addObstacle(1 - a, z + gap * 0.6);
-    } else if (r < 0.83) {
-      const l = randLane();
-      addCoin(l, z);
-      addCoin(l, z + gap * 0.3);
+      addObstacle(1 - a, z + gap * 0.85);
+    } else if (r < 0.88) {
+      const a = randLane();
+      addObstacle(a, z);
+      addObstacle(a, z + gap * 0.5);
     } else {
-      const l = randLane();
-      addObstacle(l, z);
-      addCoin(1 - l, z + gap * 0.35);
+      addObstacle(randLane(), z + gap * 0.35);
     }
   }
 
@@ -554,21 +517,6 @@
     pal = base;
   }
 
-  /* ---------------- 粒子 ---------------- */
-  function burst(lane, strong) {
-    const p = project(lane === 0 ? -LANE : LANE, HIT_Z);
-    const n = strong ? 7 : 5;
-    for (let i = 0; i < n; i++) {
-      particles.push({
-        x: p.x, y: p.y - 2,
-        vx: (Math.random() - 0.5) * (strong ? 60 : 40),
-        vy: -20 - Math.random() * (strong ? 50 : 30),
-        life: strong ? 0.42 : 0.3,
-        t: 0
-      });
-    }
-  }
-
   /* ---------------- 世界更新 ---------------- */
   function updateWorld(dt) {
     // 障碍
@@ -576,72 +524,19 @@
       o.z -= speed * dt;
       if (!o.done && o.z <= HIT_Z) {
         o.done = true;
-        const stepped = feet[o.lane].down;
-        if (o.type === 'stepbox') {
-          if (stepped) {
-            addScore(2 * buffMul());
-            combo++;
-            sfxBox();
-            burst(o.lane, false);
-          }
-        } else if (stepped) {
+        if (feet[o.lane].down) {
           fall('hit');
           break;
-        } else {
-          addScore(1 * buffMul());
-          combo++;
-          sfxPass();
         }
+        combo++;
+        sfxPass();
       }
     }
     obstacles = obstacles.filter((o) => o.z > Z_NEAR - 3);
     if (state !== 'playing') return;
 
-    // 金币
-    for (const c of coins) {
-      c.z -= speed * dt;
-      if (!c.done && c.z <= HIT_Z) {
-        c.done = true;
-        if (feet[c.lane].down) {
-          addScore(1 * coinMul());
-          combo++;
-          sfxCoin();
-          burst(c.lane, true);
-        } else {
-          c.missed = true;
-          combo = 0;
-        }
-      }
-    }
-    coins = coins.filter((c) => c.z > Z_NEAR - 3);
-
-    // 分岔拱门
-    for (const a of arches) a.z -= speed * dt;
-    if (fork && fork.chosen === null && arches.length && arches[0].z <= HIT_Z) {
-      let lane = -1;
-      if (feet[0].down && !feet[1].down) lane = 0;
-      else if (feet[1].down && !feet[0].down) lane = 1;
-      fork.chosen = lane;
-      if (lane >= 0) {
-        buff = { type: lane === 0 ? 'coin' : 'obs', t: 12, dur: 12 };
-        sfxRoute(true);
-      } else {
-        sfxRoute(false);
-      }
-    }
-    arches = arches.filter((a) => a.z > Z_NEAR - 3);
-    if (fork && fork.chosen !== null && arches.length === 0) {
-      fork = null;
-      nextForkAt = dist + 200 + Math.random() * 70;
-    }
-
-    if (buff) {
-      buff.t -= dt;
-      if (buff.t <= 0) buff = null;
-    }
-
     // 弯道
-    if (!curve && !fork && dist >= nextCurveAt) startCurve();
+    if (!curve && dist >= nextCurveAt) startCurve();
     if (curve) {
       if (!curve.done) {
         curve.t += dt;
@@ -655,9 +550,6 @@
       }
     }
 
-    // 分岔触发
-    if (!fork && !curve && dist >= nextForkAt) startFork();
-
     // 节拍：地鼓脉冲 + 量化生成
     beatAcc += dt;
     while (beatAcc >= BEAT) {
@@ -667,7 +559,7 @@
       beatCountdown -= 1;
       if (beatCountdown <= 0) {
         if (!curve && state === 'playing') spawnBeat();
-        beatCountdown += Math.max(1.4, 3 - score * 0.02);
+        beatCountdown += Math.max(1.5, 3 - dist * 0.002);
       }
     }
     beatPulse = Math.max(0, beatPulse - dt * 3.4);
@@ -682,10 +574,12 @@
       const anyDown = feet[0].down || feet[1].down;
       dashT = Math.max(0, dashT - dt);
       const envMul = (isTunnel() ? 1.12 : 1) * (dashT > 0 ? 1.6 : 1);
-      const target = anyDown ? (26 + Math.min(24, score * 0.6)) * envMul : 0;
+      const target = anyDown ? (26 + Math.min(24, dist * 0.02)) * envMul : 0;
       speed += (target - speed) * Math.min(1, dt * 8);
       if (!anyDown && speed < 4) speed = 0;
       dist += speed * dt;
+      scoreAcc += (speed * dt) / 10 * mult();
+      if (Math.floor(scoreAcc) !== score) setScore(Math.floor(scoreAcc));
       bobPhase += speed * dt * 0.22;
       bobY = Math.sin(bobPhase) * 0.9;
 
@@ -907,34 +801,6 @@
     ctx.fillRect(left + w1 - 1, y - 1, 1, Math.round(h1 * 0.6));
   }
 
-  // 可踩矮箱：镂空木箱
-  function drawStepBox(x, y, w, h) {
-    const w1 = Math.max(4, Math.round(w));
-    const h1 = Math.max(3, Math.round(h));
-    const left = Math.round(x - w1 / 2);
-    const top = Math.round(y - h1);
-    ctx.fillStyle = pal.ink;
-    ctx.globalAlpha = 0.14;
-    ctx.fillRect(left, top, w1, h1);
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = pal.ink;
-    // 边框
-    ctx.fillRect(left, top, w1, 1);
-    ctx.fillRect(left, top + h1 - 1, w1, 1);
-    ctx.fillRect(left, top, 1, h1);
-    ctx.fillRect(left + w1 - 1, top, 1, h1);
-    // 交叉
-    const steps = Math.max(2, Math.round(Math.max(w1, h1)));
-    for (let i = 0; i < steps; i++) {
-      const t = i / steps;
-      ctx.fillRect(Math.round(left + t * (w1 - 1)), Math.round(top + t * (h1 - 1)), 1, 1);
-      ctx.fillRect(Math.round(left + (1 - t) * (w1 - 1)), Math.round(top + t * (h1 - 1)), 1, 1);
-    }
-    // 顶面
-    ctx.fillStyle = DANGER;
-    ctx.fillRect(left, top, w1, 1);
-  }
-
   // 弯道路缘：贴地的低矮条纹块
   function drawCurb(x, y, w, h) {
     const w1 = Math.max(4, Math.round(w));
@@ -952,94 +818,9 @@
     ctx.fillRect(left, top + h1, w1, 1);
   }
 
-  function drawCoinMarker(lane, z, missed) {
-    if (z < 14) return;
-    const xw = lane === 0 ? -LANE : LANE;
-    const hw = LANE * 0.55;
-    const dep = Math.max(2.2, LANE * 1.1);
-    const a = project(xw - hw, z);
-    const b = project(xw + hw, z);
-    const c = project(xw + hw, z + dep);
-    const d = project(xw - hw, z + dep);
-
-    ctx.globalAlpha = missed ? 0.22 : 0.8;
-    ctx.strokeStyle = pal.ink;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.lineTo(c.x, c.y);
-    ctx.lineTo(d.x, d.y);
-    ctx.closePath();
-    ctx.stroke();
-
-    const m = project(xw, z + dep * 0.5);
-    ctx.fillStyle = pal.ink;
-    ctx.fillRect(Math.round(m.x), Math.round(m.y), 2, 2);
-    ctx.globalAlpha = 1;
-  }
-
-  // 分岔拱门
-  function drawArch(lane, z) {
-    if (z <= HIT_Z) return;
-    const xw = lane === 0 ? -LANE : LANE;
-    const p = project(xw, z);
-    if (p.x < -50 || p.x > VW + 50) return;
-    const hw = Math.max(4, LANE * 1.0 * p.s);
-    const h = Math.max(6, LANE * 2.1 * p.s);
-    const left = Math.round(p.x - hw);
-    const right = Math.round(p.x + hw);
-    const top = Math.round(p.y - h);
-    const th = Math.max(1, Math.round(1.1 * p.s));
-    const chosen = fork && fork.chosen === lane;
-    const col = chosen ? DANGER : pal.ink;
-
-    // 选路地垫
-    if (z < 55) {
-      ctx.globalAlpha = Math.max(0, 0.1 * (1 - z / 55));
-      ctx.fillStyle = col;
-      ctx.fillRect(left, Math.round(p.y) - 1, right - left, 2);
-      ctx.globalAlpha = 1;
-    }
-
-    ctx.fillStyle = col;
-    ctx.fillRect(left, top, th, h);
-    ctx.fillRect(right - th, top, th, h);
-    ctx.fillRect(left, top, right - left, th);
-
-    // 图标：左金币 / 右障碍
-    const ix = Math.round((left + right) / 2);
-    const iy = top + Math.max(2, Math.round(th + 1));
-    ctx.fillStyle = chosen ? DANGER : pal.ink;
-    if (lane === 0) {
-      ctx.fillRect(ix - 1, iy, 3, 3);
-      ctx.fillStyle = pal.ink;
-      ctx.fillRect(ix, iy + 1, 1, 1);
-    } else {
-      for (let i = 0; i < 3; i++) ctx.fillRect(ix - 2 + i, iy + 3 - i, 4 - i * 2, 1);
-    }
-  }
-
   function drawObjects() {
-    const list = [];
-    for (const a of arches) list.push({ kind: 'arch', lane: a.lane, z: a.z });
-    for (const o of obstacles) list.push({ kind: 'obs', lane: o.lane, z: o.z, type: o.type, wf: o.wf, hf: o.hf });
-    for (const c of coins) list.push({ kind: 'coin', lane: c.lane, z: c.z, missed: c.missed });
-    list.sort((a, b) => b.z - a.z);
-
+    const list = obstacles.slice().sort((a, b) => b.z - a.z);
     for (const it of list) {
-      if (it.z <= Z_NEAR - 2) continue;
-
-      if (it.kind === 'coin') {
-        drawCoinMarker(it.lane, it.z, it.missed);
-        continue;
-      }
-
-      if (it.kind === 'arch') {
-        drawArch(it.lane, it.z);
-        continue;
-      }
-
       if (it.z < HIT_Z + 0.5) continue;
       const xw = it.lane === 0 ? -LANE : LANE;
       const p = project(xw, it.z);
@@ -1056,7 +837,6 @@
       const h = it.hf * LANE * p.s;
       if (it.type === 'rock') drawRock(p.x, p.y, w, h);
       else if (it.type === 'cone') drawCone(p.x, p.y, w, h);
-      else if (it.type === 'stepbox') drawStepBox(p.x, p.y, w, h);
       else if (it.type === 'curb') drawCurb(p.x, p.y, w, h);
       else drawBarrier(p.x, p.y, w, h);
     }
@@ -1104,33 +884,72 @@
     }
   }
 
+  function supportSide() {
+    if (feet[0].down && !feet[1].down) return 0;
+    if (feet[1].down && !feet[0].down) return 1;
+    return -1;
+  }
+
   function drawBalanceRing(x, y) {
-    ctx.globalAlpha = 0.2 + balance * 0.55;
-    ctx.strokeStyle = DANGER;
-    ctx.lineWidth = 1;
+    const cx = Math.round(x);
+    const cy = Math.round(y - 2);
+    const r = Math.round(10 + balance * 6);
+    ctx.lineWidth = 2;
+
+    // 底环
+    ctx.globalAlpha = 0.2;
+    ctx.strokeStyle = pal.ink;
     ctx.beginPath();
-    ctx.ellipse(Math.round(x), Math.round(y + 2), 8 + balance * 3, 3, 0, 0, Math.PI * 2);
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.stroke();
+
+    // 进度弧：从左下扫到右下
+    const start = Math.PI * 0.72;
+    ctx.globalAlpha = 0.55 + balance * 0.45;
+    ctx.strokeStyle = DANGER;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, start, start + Math.PI * 1.56 * Math.min(1, balance), false);
+    ctx.stroke();
+
+    // 临界时整圈闪烁
+    if (balance > 0.78) {
+      ctx.globalAlpha = 0.5 * (0.5 + 0.5 * Math.sin(performance.now() * 0.022));
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 3, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     ctx.globalAlpha = 1;
   }
 
-  function drawSkates(leanX) {
+  function drawSkates(tilt) {
     if (state === 'falling' || state === 'over') {
       const t = state === 'over' ? 1 : Math.min(1, fallT / FALL_TIME);
       const e = t * t * (3 - 2 * t);
-      drawSkate(skateL + leanX - e * 26, skateY - e * 30, 0, false, true);
-      drawSkate(skateR + leanX + e * 30, skateY - e * 34, 1, false, true);
+      drawSkate(skateL - e * 26, skateY - e * 30, 0, false, true);
+      drawSkate(skateR + e * 30, skateY - e * 34, 1, false, true);
       return;
     }
     const ready = state === 'ready';
-    drawSkate(skateL + leanX, skateY, 0, ready || feet[0].down, false);
-    drawSkate(skateR + leanX, skateY, 1, ready || feet[1].down, false);
 
-    // 失衡环：单脚支撑时脚下收紧的红环
-    if (state === 'playing' && balance > 0.03) {
-      if (feet[0].down && !feet[1].down) drawBalanceRing(skateL + leanX, skateY);
-      else if (feet[1].down && !feet[0].down) drawBalanceRing(skateR + leanX, skateY);
+    ctx.save();
+    ctx.translate(VW / 2, skateY);
+    ctx.rotate(tilt);
+    ctx.translate(-VW / 2, -skateY);
+
+    // 失衡时支撑脚轻微发抖
+    const ss = state === 'playing' ? supportSide() : -1;
+    const wob = (ss >= 0 && balance > 0.45)
+      ? Math.round(Math.sin(performance.now() * 0.05) * (balance - 0.45) * 6)
+      : 0;
+
+    drawSkate(skateL + (ss === 0 ? wob : 0), skateY, 0, ready || feet[0].down, false);
+    drawSkate(skateR + (ss === 1 ? wob : 0), skateY, 1, ready || feet[1].down, false);
+
+    // 失衡环：支撑脚下方
+    if (ss >= 0 && balance > 0.03) {
+      drawBalanceRing(ss === 0 ? skateL : skateR, skateY);
     }
+    ctx.restore();
   }
 
   function drawTunnel() {
@@ -1194,6 +1013,21 @@
       ctx.globalAlpha = 1;
     }
 
+    // 失衡警示：越接近摔倒，两侧橙光越强并随心跳闪动
+    if (state === 'playing' && balance > 0.42) {
+      const k = Math.min(1, (balance - 0.42) / 0.58);
+      const pulse = 0.6 + 0.4 * Math.sin(performance.now() * 0.014);
+      const wpx = 2 + Math.round(k * 4);
+      ctx.globalAlpha = 0.12 + 0.45 * k * pulse;
+      ctx.fillStyle = DANGER;
+      ctx.fillRect(0, 0, wpx, VH);
+      ctx.fillRect(VW - wpx, 0, wpx, VH);
+      ctx.fillRect(0, 0, VW, Math.max(1, Math.round(k * 2)));
+      ctx.globalAlpha = 0.08 * k;
+      ctx.fillRect(0, VH - 2, VW, 2);
+      ctx.globalAlpha = 1;
+    }
+
     // 冲刺边缘光
     if (dashT > 0) {
       ctx.globalAlpha = Math.min(0.5, dashT / 0.9 * 0.5);
@@ -1229,32 +1063,6 @@
   function drawHUDText() {
     if (state !== 'playing') return;
     const now = performance.now();
-
-    if (buff) {
-      const label = buff.type === 'coin' ? '金币 ×2' : '障碍 ×2';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.font = '6px ui-monospace, monospace';
-      ctx.fillStyle = pal.ink;
-      ctx.globalAlpha = 0.75;
-      ctx.fillText(label, 6, 7);
-      ctx.globalAlpha = 0.3;
-      ctx.fillRect(6, 16, 30, 1);
-      ctx.globalAlpha = 0.85;
-      ctx.fillStyle = DANGER;
-      ctx.fillRect(6, 16, Math.max(0, Math.round(30 * buff.t / buff.dur)), 1);
-      ctx.globalAlpha = 1;
-    }
-
-    if (fork && fork.chosen === null && arches.length) {
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.font = '6px ui-monospace, monospace';
-      ctx.fillStyle = pal.ink;
-      ctx.globalAlpha = 0.75;
-      ctx.fillText('抬脚选路：左金币 右障碍', VW / 2, 27);
-      ctx.globalAlpha = 1;
-    }
 
     if (mult() > 1) {
       ctx.textAlign = 'right';
@@ -1296,14 +1104,26 @@
 
     const t = Math.min(1, state === 'over' ? 1 : (state === 'falling' ? fallT / FALL_TIME : 0));
     const fe = t * t * (3 - 2 * t);
-    let leanX = 0;
-    if (state === 'playing' && balance > 0.02) {
-      if (feet[0].down && !feet[1].down) leanX = -balance * 3;
-      else if (feet[1].down && !feet[0].down) leanX = balance * 3;
+
+    // 失衡：镜头向支撑脚方向倾斜，重心越偏越明显
+    const bs = state === 'playing' ? supportSide() : -1;
+    let leanX = 0, tilt = 0, shakeX = 0;
+    if (bs >= 0 && balance > 0.02) {
+      const dir = bs === 0 ? -1 : 1;
+      leanX = dir * balance * 9;
+      tilt = dir * balance * 0.035;
+      if (balance > 0.68) {
+        shakeX = Math.sin(performance.now() * 0.05) * (balance - 0.68) * 8;
+      }
     }
 
     ctx.save();
-    ctx.translate(leanX, 0);
+    ctx.translate(leanX + shakeX, 0);
+    if (tilt !== 0) {
+      ctx.translate(VW / 2, VH);
+      ctx.rotate(tilt * 0.5);
+      ctx.translate(-VW / 2, -VH);
+    }
     if (curveAmt > 0.001 && curve) {
       const roll = curveAmt * (curve.side === 0 ? -0.08 : 0.08);
       ctx.translate(VW / 2, horizon * 1.3);
@@ -1322,7 +1142,7 @@
     drawTunnel();
     ctx.restore();
 
-    drawSkates(leanX);
+    drawSkates(tilt);
     drawEffects();
     drawHUDText();
 
