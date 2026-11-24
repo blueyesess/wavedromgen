@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+<meta name="theme-color" content="#ffffff" />
+<title>一步</title>
+<style>
+  :root { --ink:#111111; --paper:#ffffff; --danger:#FF5A1F; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body {
+    margin:0; height:100%; background:var(--paper); overflow:hidden;
+    overscroll-behavior:none; -webkit-user-select:none; user-select:none;
+  }
+  body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:var(--ink); }
+  canvas { display:block; position:fixed; inset:0; touch-action:none; }
+  #hud {
+    position:fixed; top:calc(env(safe-area-inset-top) + 18px); left:0; right:0;
+    text-align:center; font-size:13px; letter-spacing:.18em; opacity:.5;
+    pointer-events:none; font-variant-numeric:tabular-nums;
+  }
+  #overlay {
+    position:fixed; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:14px; text-align:center;
+    pointer-events:none; transition:opacity .18s ease;
+  }
+  #overlay.hide { opacity:0; }
+  .big { font-size:min(18vw, 86px); font-weight:500; letter-spacing:.02em; line-height:1; }
+  .sub { font-size:13px; letter-spacing:.12em; opacity:.55; }
+  .hint { margin-top:10px; font-size:12px; letter-spacing:.28em; opacity:.35; animation:breathe 2.4s ease-in-out infinite; }
+  @keyframes breathe { 0%,100% { opacity:.18 } 50% { opacity:.55 } }
+  @media (prefers-reduced-motion: reduce) { .hint { animation:none; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">0 m</div>
+<div id="overlay">
+  <div class="big">一步</div>
+  <div class="sub">交替轻点 · 两只脚不能同时离开屏幕</div>
+  <div class="hint">轻点开始</div>
+</div>
+<script>
+(() => {
+  'use strict';
+
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const hud = document.getElementById('hud');
+  const overlay = document.getElementById('overlay');
+
+  const INK = '#111111';
+  const PAPER = '#ffffff';
+  const DANGER = '#FF5A1F';
+
+  const R = 13;             // 脚的半径
+  const HIT_R = 9;          // 更宽容的碰撞半径
+  const BOTH_UP_GRACE = 0.16; // 双脚离屏允许的容错时间（秒）
+  const IMPULSE = 120;      // 每步获得的速度
+  const DECAY = 1.25;       // 每秒速度衰减
+  const MAX_SPEED = 420;
+
+  let W = 0, H = 0, DPR = 1, horizon = 0;
+
+  const feet = [
+    { x: 0, sources: new Set(), down: false, bob: 0 },
+    { x: 0, sources: new Set(), down: false, bob: 0 }
+  ];
+
+  let state = 'ready'; // ready | playing | over
+  let dist = 0;
+  let speed = 0;
+  let bothUpT = 0;
+  let obstacles = [];
+  let ripples = [];
+  let nextSpawn = 0;
+  let hitFlash = 0;
+  let overAt = 0;
+  let shake = 0;
+  let lastTime = 0;
+  let best = 0;
+
+  try { best = parseInt(localStorage.getItem('yibu.best') || '0', 10) || 0; } catch (e) {}
+
+  /* ---------------- audio ---------------- */
+  let ac = null;
+  let master = null;
+
+  function audio() {
+    if (ac) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    ac = new AC();
+    if (ac.state === 'suspended') ac.resume();
+    master = ac.createGain();
+    master.gain.value = 0.22;
+    master.connect(ac.destination);
+  }
+
+  function blip(freq, dur, type, vol, slideTo) {
+    if (!ac) return;
+    const t0 = ac.currentTime;
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, t0);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(gain);
+    gain.connect(master);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  }
+
+  function sfxStep(side) {
+    blip(side === 0 ? 196 : 147, 0.07, 'triangle', 0.5);
+  }
+
+  function sfxHit() {
+    blip(150, 0.32, 'sawtooth', 0.7, 45);
+  }
+
+  /* ---------------- layout ---------------- */
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    horizon = Math.round(H * 0.66);
+    feet[0].x = Math.round(W * 0.42);
+    feet[1].x = Math.round(W * 0.64);
+  }
+
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+
+  /* ---------------- game ---------------- */
+  function meters() {
+    return Math.floor(dist / 50);
+  }
+
+  function reset() {
+    dist = 0;
+    speed = 0;
+    bothUpT = -1.0; // 开局给一点宽容时间
+    obstacles = [];
+    ripples = [];
+    nextSpawn = 380;
+    hitFlash = 0;
+    shake = 0;
+    feet.forEach((f) => {
+      f.sources.clear();
+      f.bob = 0;
+      f.down = false;
+    });
+    hud.textContent = '0 m';
+  }
+
+  function toPlaying() {
+    reset();
+    state = 'playing';
+    overlay.classList.add('hide');
+  }
+
+  function start() {
+    audio();
+    toPlaying();
+  }
+
+  function restart() {
+    toPlaying();
+  }
+
+  function showReady() {
+    state = 'ready';
+    overlay.classList.remove('hide');
+    overlay.innerHTML =
+      '<div class="big">一步</div>' +
+      '<div class="sub">交替轻点 · 两只脚不能同时离开屏幕</div>' +
+      (best > 0 ? '<div class="sub">最佳 ' + best + ' m</div>' : '') +
+      '<div class="hint">轻点开始</div>';
+  }
+
+  function fail() {
+    if (state !== 'playing') return;
+    state = 'over';
+    overAt = performance.now();
+    hitFlash = 1;
+    shake = 1;
+    const m = meters();
+    if (m > best) {
+      best = m;
+      try { localStorage.setItem('yibu.best', String(best)); } catch (e) {}
+    }
+    sfxHit();
+    overlay.classList.remove('hide');
+    overlay.innerHTML =
+      '<div class="big">' + m + ' m</div>' +
+      '<div class="sub">最佳 ' + best + ' m</div>' +
+      '<div class="hint">轻点重来</div>';
+  }
+
+  function doStep(side) {
+    if (state !== 'playing') return;
+    speed = Math.min(MAX_SPEED, speed + IMPULSE);
+    feet[side].bob = 1;
+    ripples.push({ x: feet[side].x, y: horizon - 4, t: 0 });
+    sfxStep(side);
+  }
+
+  function spawn() {
+    obstacles.push({
+      lane: Math.random() < 0.5 ? 0 : 1,
+      x: W + 40,
+      w: Math.random() < 0.35 ? 18 : 7,
+      h: Math.random() < 0.35 ? 34 : 22,
+      hit: false
+    });
+  }
+
+  /* ---------------- input ---------------- */
+  const pointerSide = new Map();
+
+  function sideAt(x) {
+    return x < W / 2 ? 0 : 1;
+  }
+
+  function press(side, id) {
+    const f = feet[side];
+    const wasDown = f.sources.size > 0;
+    f.sources.add(id);
+    if (!wasDown) doStep(side);
+  }
+
+  function release(side, id) {
+    feet[side].sources.delete(id);
+  }
+
+  function onPointerDown(e) {
+    e.preventDefault();
+    audio();
+
+    if (state === 'ready') {
+      start(); // 这一下也算第一步
+    } else if (state === 'over') {
+      if (performance.now() - overAt > 420) restart();
+      return;
+    }
+    if (state !== 'playing') return;
+
+    const side = sideAt(e.clientX);
+    pointerSide.set(e.pointerId, side);
+    press(side, 'p' + e.pointerId);
+  }
+
+  function onPointerUp(e) {
+    const side = pointerSide.get(e.pointerId);
+    if (side === undefined) return;
+    pointerSide.delete(e.pointerId);
+    release(side, 'p' + e.pointerId);
+  }
+
+  canvas.addEventListener('pointerdown', onPointerDown, { passive: false });
+  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', onPointerUp);
+  window.addEventListener('blur', () => {
+    pointerSide.forEach((side, id) => release(side, 'p' + id));
+    pointerSide.clear();
+  });
+
+  const KEY_SIDE = { KeyA: 0, ArrowLeft: 0, KeyL: 1, ArrowRight: 1 };
+  const keysDown = new Set();
+
+  window.addEventListener('keydown', (e) => {
+    const side = KEY_SIDE[e.code];
+    if (side === undefined || e.repeat) return;
+    e.preventDefault();
+    audio();
+
+    if (state === 'ready') {
+      start();
+    } else if (state === 'over') {
+      if (performance.now() - overAt > 420) restart();
+      return;
+    }
+    if (state !== 'playing') return;
+
+    const id = 'k' + e.code;
+    if (!keysDown.has(id)) {
+      keysDown.add(id);
+      press(side, id);
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    const side = KEY_SIDE[e.code];
+    if (side === undefined) return;
+    const id = 'k' + e.code;
+    if (keysDown.has(id)) {
+      keysDown.delete(id);
+      release(side, id);
+    }
+  });
+
+  window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  /* ---------------- update ---------------- */
+  function update(dt) {
+    for (const f of feet) f.down = f.sources.size > 0;
+
+    if (state === 'playing') {
+      speed *= Math.exp(-DECAY * dt);
+      if (speed < 4) speed = 0;
+      dist += speed * dt;
+
+      // 双脚离屏判定
+      const bothUp = !feet[0].down && !feet[1].down;
+      if (bothUp) {
+        bothUpT += dt;
+        if (bothUpT > BOTH_UP_GRACE) fail();
+      } else {
+        bothUpT = 0;
+      }
+
+      // 障碍移动与碰撞
+      for (const o of obstacles) {
+        o.x -= speed * dt;
+        if (o.hit) continue;
+
+        // 双脚都离屏时不具备“抬脚躲过”的资格
+        const live = feet[o.lane].down || bothUpT > 0.05;
+        if (!live) continue;
+
+        const fx = feet[o.lane].x;
+        if (o.x < fx + HIT_R && o.x + o.w > fx - HIT_R) {
+          o.hit = true;
+          fail();
+        }
+      }
+
+      obstacles = obstacles.filter((o) => o.x + o.w > -60);
+
+      if (dist > nextSpawn) {
+        spawn();
+        const gap = Math.max(300, 560 - dist * 0.03);
+        nextSpawn = dist + gap;
+      }
+
+      hud.textContent = meters() + ' m';
+    }
+
+    for (const f of feet) f.bob = Math.max(0, f.bob - dt * 4);
+    for (const r of ripples) r.t += dt;
+    ripples = ripples.filter((r) => r.t < 0.5);
+    hitFlash = Math.max(0, hitFlash - dt * 4);
+    shake = Math.max(0, shake - dt * 5);
+  }
+
+  /* ---------------- draw ---------------- */
+  function draw() {
+    ctx.save();
+
+    if (shake > 0) {
+      const s = shake * 6;
+      ctx.translate((Math.random() - 0.5) * s, (Math.random() - 0.5) * s);
+    }
+
+    ctx.fillStyle = PAPER;
+    ctx.fillRect(-20, -20, W + 40, H + 40);
+
+    // 地平线
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, horizon + 0.5);
+    ctx.lineTo(W, horizon + 0.5);
+    ctx.stroke();
+
+    // 地面刻度，用来传达速度
+    ctx.globalAlpha = 0.12;
+    ctx.lineWidth = 2;
+    const offset = dist % 56;
+    for (let x = -offset; x < W; x += 56) {
+      ctx.beginPath();
+      ctx.moveTo(x, horizon + 15);
+      ctx.lineTo(x + 26, horizon + 15);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // 落脚步的涟漪
+    for (const r of ripples) {
+      const p = r.t / 0.5;
+      ctx.globalAlpha = 0.16 * (1 - p);
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, 8 + p * 22, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // 障碍
+    for (const o of obstacles) {
+      ctx.fillStyle = o.hit ? '#c9c9c6' : DANGER;
+      ctx.fillRect(o.x, horizon - o.h, o.w, o.h);
+    }
+
+    // 脚
+    feet.forEach((f) => {
+      const y = horizon - 4;
+      if (f.down) {
+        const bob = f.bob * 2;
+        ctx.fillStyle = PAPER;
+        ctx.beginPath();
+        ctx.arc(f.x, y - bob, R + 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = INK;
+        ctx.beginPath();
+        ctx.arc(f.x, y - bob, R, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.globalAlpha = 0.45;
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(f.x, y - 13, R - 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    });
+
+    ctx.restore();
+
+    if (hitFlash > 0) {
+      ctx.globalAlpha = hitFlash * 0.14;
+      ctx.fillStyle = DANGER;
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  /* ---------------- loop ---------------- */
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastTime) / 1000 || 0);
+    lastTime = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  resize();
+  reset();
+  showReady();
+  requestAnimationFrame((t) => {
+    lastTime = t;
+    frame(t);
+  });
+})();
+</script>
+</body>
+</html>
