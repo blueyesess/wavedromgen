@@ -238,7 +238,7 @@
     overlay.classList.remove('hide');
     overlay.innerHTML =
       '<div class="big">一步</div>' +
-      '<div class="sub">按住滑行 · 抬脚躲障碍 · 黑砖必须踩</div>' +
+      '<div class="sub">按住向前滑 · 抬脚越过障碍</div>' +
       (best > 0 ? '<div class="sub">最佳 ' + best + '</div>' : '') +
       '<div class="hint">按住开始</div>';
   }
@@ -302,47 +302,30 @@
   }
 
   function spawnBeat() {
-    const gap = Math.max(22, speed * 0.85);
+    const gap = Math.max(26, speed);
     const r = Math.random();
     const z = Z_FAR;
 
-    // 前 4 分：轮流教“抬脚”和“踩砖”
-    if (score < 4) {
-      if (r < 0.6) addObstacle(randLane(), z);
+    if (score < 5) {
+      if (r < 0.55) addObstacle(randLane(), z);
       else addCoin(randLane(), z);
       return;
     }
 
-    if (r < 0.28) {
+    if (r < 0.42) {
       addObstacle(randLane(), z);
-    } else if (r < 0.44) {
-      // 左右错开：逼你连续换脚
+    } else if (r < 0.66) {
       const a = randLane();
       addObstacle(a, z);
-      addObstacle(1 - a, z + gap * 0.45);
-    } else if (r < 0.60) {
-      // 同一路：先抬、后踩，落地晚了就摔
-      const a = randLane();
-      addObstacle(a, z);
-      addCoin(a, z + gap * 0.5);
-    } else if (r < 0.74) {
-      // 同一路：先踩、后抬
-      const a = randLane();
-      addCoin(a, z);
-      addObstacle(a, z + gap * 0.5);
-    } else if (r < 0.88) {
-      // 一只脚抬、另一只脚踩，同时发生
-      const a = randLane();
-      addObstacle(a, z);
-      addCoin(1 - a, z + gap * 0.18);
-    } else if (score >= 14) {
-      // 踩-抬-踩：早抬会漏砖，晚落会撞，只留一个窄窗
-      const a = randLane();
-      addCoin(a, z);
-      addObstacle(a, z + gap * 0.4);
-      addCoin(a, z + gap * 0.8);
+      addObstacle(1 - a, z + gap * 0.55);
+    } else if (r < 0.86) {
+      const l = randLane();
+      addCoin(l, z);
+      addCoin(l, z + gap * 0.22);
     } else {
-      addObstacle(randLane(), z);
+      const l = randLane();
+      addObstacle(l, z);
+      addCoin(1 - l, z + gap * 0.32);
     }
   }
 
@@ -442,7 +425,7 @@
 
     if (state === 'playing') {
       const anyDown = feet[0].down || feet[1].down;
-      const target = anyDown ? 30 + Math.min(28, score * 0.9) : 0;
+      const target = anyDown ? 26 + Math.min(24, score * 0.6) : 0;
       speed += (target - speed) * Math.min(1, dt * 8);
       if (!anyDown && speed < 4) speed = 0;
       dist += speed * dt;
@@ -494,21 +477,17 @@
                 }
               } else {
                 c.missed = true;
-                fall();
-                break;
               }
             }
           }
           coins = coins.filter((c) => c.z > Z_NEAR - 3);
 
           // 生成节奏
-          if (state === 'playing') {
-            spawnClock += dt;
-            if (spawnClock >= spawnInterval) {
-              spawnClock = 0;
-              spawnBeat();
-              spawnInterval = Math.max(0.62, 1.72 - score * 0.03);
-            }
+          spawnClock += dt;
+          if (spawnClock >= spawnInterval) {
+            spawnClock = 0;
+            spawnBeat();
+            spawnInterval = Math.max(0.85, 1.85 - score * 0.02);
           }
         }
       }
@@ -676,7 +655,7 @@
   }
 
   function drawCoinMarker(lane, z, missed) {
-    if (z < 12) return;
+    if (z < 14) return;
     const xw = lane === 0 ? -LANE : LANE;
     const hw = LANE * 0.55;
     const dep = Math.max(2.2, LANE * 1.1);
@@ -685,27 +664,20 @@
     const c = project(xw + hw, z + dep);
     const d = project(xw - hw, z + dep);
 
+    ctx.globalAlpha = missed ? 0.22 : 0.8;
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
     ctx.lineTo(c.x, c.y);
     ctx.lineTo(d.x, d.y);
     ctx.closePath();
+    ctx.stroke();
 
-    if (missed) {
-      ctx.globalAlpha = 0.25;
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    } else {
-      // 实心黑砖：必须踩上去
-      ctx.globalAlpha = 0.92;
-      ctx.fillStyle = INK;
-      ctx.fill();
-      const m = project(xw, z + dep * 0.5);
-      ctx.fillStyle = PAPER;
-      ctx.fillRect(Math.round(m.x) - 1, Math.round(m.y) - 1, 2, 2);
-    }
+    const m = project(xw, z + dep * 0.5);
+    ctx.fillStyle = INK;
+    ctx.fillRect(Math.round(m.x), Math.round(m.y), 2, 2);
     ctx.globalAlpha = 1;
   }
 
