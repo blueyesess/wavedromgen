@@ -148,12 +148,6 @@
 
   // 失衡
   let balance = 0;
-  let prevBoth = false;
-
-  // 双踩蓄力 / 冲刺
-  let charge = 0;
-  let chargeReady = false;
-  let dashT = 0;
 
   // 连击
   let combo = 0;
@@ -203,7 +197,6 @@
 
   function sfxStep(side) { blip(side === 0 ? 220 : 165, 0.06, 'square', 0.35); }
   function sfxPass() { blip(520, 0.035, 'square', 0.14); }
-  function sfxDash() { blip(180, 0.18, 'sawtooth', 0.28, 620); }
   function sfxTick() { blip(90, 0.02, 'square', 0.05); }
   function sfxFall() {
     blip(190, 0.28, 'sawtooth', 0.5, 60);
@@ -230,12 +223,12 @@
     horizon = Math.round(VH * 0.46);
     FOCAL = VH * 0.5;
     S_HIT = FOCAL / HIT_Z;
-    LANE = (0.24 * VW) / S_HIT;
+    LANE = (0.175 * VW) / S_HIT;
     ROAD_HALF = (0.72 * VW) / S_HIT;
     CAM_H = (VH * 0.92 - horizon) / S_HIT;
 
-    skateL = Math.round(VW * 0.26);
-    skateR = Math.round(VW * 0.74);
+    skateL = Math.round(VW * 0.325);
+    skateR = Math.round(VW * 0.675);
     skateY = Math.round(horizon + CAM_H * S_HIT) - 2;
   }
 
@@ -284,10 +277,6 @@
     particles = [];
     fallCause = '';
     balance = 0;
-    prevBoth = false;
-    charge = 0;
-    chargeReady = false;
-    dashT = 0;
     combo = 0;
     curve = null;
     curveAmt = 0;
@@ -612,8 +601,7 @@
 
     if (state === 'playing') {
       const anyDown = feet[0].down || feet[1].down;
-      dashT = Math.max(0, dashT - dt);
-      const envMul = (isTunnel() ? 1.12 : 1) * (dashT > 0 ? 1.6 : 1);
+      const envMul = isTunnel() ? 1.12 : 1;
       const target = anyDown ? (26 + Math.min(24, dist * 0.02)) * envMul : 0;
       speed += (target - speed) * Math.min(1, dt * 8);
       if (!anyDown && speed < 4) speed = 0;
@@ -643,21 +631,6 @@
       } else {
         bothUpT = 0;
       }
-
-      // 双踩蓄力 → 单脚抬起触发冲刺
-      const nowBoth = feet[0].down && feet[1].down;
-      if (nowBoth) {
-        charge = Math.min(1, charge + dt / 1.2);
-        if (charge >= 1) chargeReady = true;
-      } else if (prevBoth && chargeReady && !bothUp && state === 'playing') {
-        chargeReady = false;
-        charge = 0;
-        dashT = 0.9;
-        sfxDash();
-      } else if (!chargeReady) {
-        charge = Math.max(0, charge - dt * 0.9);
-      }
-      prevBoth = nowBoth;
 
       if (state === 'playing') updateWorld(dt);
     } else if (state === 'falling') {
@@ -1022,72 +995,70 @@
     }
   }
 
-  function drawSkate(x, y, side, down, flung) {
-    const dir = side === 0 ? -1 : 1;
-    const lift = down ? 0 : 12;
-    const bob = down ? Math.round(feet[side].bob * 2) : 0;
-    const px = Math.round(x + (down ? 0 : -dir * 2));
-    const py = Math.round(y - lift - bob);
+  /* ---------------- 玩家：背对镜头的小猪 ---------------- */
+  const PIG = { skin:'#f9b6c2', light:'#ffcdd6', skin2:'#e693a5', skin3:'#cf7f93', scarf:'#ff7a45', scarf2:'#e2622f' };
 
-    // 影子
-    ctx.globalAlpha = down ? 0.18 : 0.08;
+  function pigU() { return Math.max(0.55, Math.min(1.15, VH / 390)); }
+
+  // 粗像素肢体（带墨色描边）
+  function pigLimb(x1, y1, x2, y2, w) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.max(1, Math.hypot(dx, dy));
+    ctx.save();
+    ctx.translate((x1 + x2) / 2, (y1 + y2) / 2);
+    ctx.rotate(Math.atan2(dy, dx));
     ctx.fillStyle = pal.ink;
-    ctx.fillRect(px - 9, Math.round(y + 1), 18, down ? 3 : 2);
-    ctx.globalAlpha = 1;
+    ctx.fillRect(-len / 2 - 1, -w / 2 - 1, len + 2, w + 2);
+    ctx.fillStyle = PIG.skin;
+    ctx.fillRect(-len / 2, -w / 2, len, w);
+    ctx.restore();
+  }
 
-    // 冲刺尾迹
-    if (dashT > 0 && down) {
-      ctx.globalAlpha = Math.min(0.4, dashT / 0.9 * 0.4);
-      ctx.fillStyle = DANGER;
-      ctx.fillRect(px - 15, py - 9, 5, 1);
-      ctx.fillRect(px - 19, py - 5, 7, 1);
-      ctx.globalAlpha = 1;
+  // 左右对称的像素圆块：先描边再填色，只留外轮廓
+  function pigBlob(cx, top, rows, fill, shade) {
+    let y = Math.round(top);
+    const boxes = [];
+    for (const r of rows) {
+      const w = Math.max(2, Math.round(r.w));
+      const h = Math.max(1, Math.round(r.h));
+      const x = Math.round(cx - w / 2);
+      ctx.fillStyle = pal.ink;
+      ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+      boxes.push({ x: x, y: y, w: w, h: h });
+      y += h;
     }
+    for (const b of boxes) {
+      ctx.fillStyle = fill;
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+    }
+    if (shade && boxes.length) {
+      const b = boxes[boxes.length - 1];
+      ctx.fillStyle = shade;
+      ctx.fillRect(b.x + 1, b.y + Math.max(0, b.h - 2), Math.max(1, b.w - 2), Math.min(2, b.h));
+    }
+    return boxes;
+  }
 
-    const body = '#fffdf4';
-    const shade = '#dfe7ea';
-
-    // 外轮廓
-    ctx.fillStyle = pal.ink;
-    ctx.fillRect(px - 9, py - 13, 18, 9);
-    ctx.fillRect(px - 6, py - 18, 12, 6);
-    // 鞋身
-    ctx.fillStyle = body;
-    ctx.fillRect(px - 8, py - 12, 16, 7);
-    // 鞋帮
-    ctx.fillRect(px - 5, py - 17, 10, 5);
-    // 鞋帮条纹
-    ctx.fillStyle = DANGER;
-    ctx.fillRect(px - 5, py - 16, 10, 2);
-    // 鞋底阴影
-    ctx.fillStyle = shade;
-    ctx.fillRect(px - 8, py - 6, 16, 1);
-    // 鞋头
-    ctx.fillStyle = pal.ink;
-    const toeX = dir > 0 ? px + 8 : px - 11;
-    ctx.fillRect(toeX, py - 11, 3, 6);
-    ctx.fillStyle = body;
-    ctx.fillRect(toeX + 1, py - 10, 1, 4);
-    // 鞋带
-    ctx.fillStyle = pal.edge;
-    ctx.fillRect(px - 4, py - 9, 8, 1);
-    ctx.fillRect(px - 3, py - 7, 6, 1);
-
+  function drawPigSkate(x, y, u) {
+    const bw = 13 * u, bh = 6 * u;
+    const left = Math.round(x - bw / 2);
+    const top = Math.round(y - 9 * u);
     // 轮子
     ctx.fillStyle = pal.ink;
-    ctx.fillRect(px - 8, py - 1, 6, 4);
-    ctx.fillRect(px + 2, py - 1, 6, 4);
+    ctx.fillRect(Math.round(x - 6 * u), Math.round(y - 3 * u), Math.max(2, Math.round(4 * u)), Math.max(2, Math.round(3 * u)));
+    ctx.fillRect(Math.round(x + 2 * u), Math.round(y - 3 * u), Math.max(2, Math.round(4 * u)), Math.max(2, Math.round(3 * u)));
     ctx.fillStyle = '#c6d0d6';
-    ctx.fillRect(px - 6, py, 2, 2);
-    ctx.fillRect(px + 4, py, 2, 2);
-
-    // 轮子转动高光
-    if (!flung) {
-      const spin = (Math.floor(dist * 0.7 + side * 2) % 4);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(px - 8 + spin, py + 2, 1, 1);
-      ctx.fillRect(px + 2 + spin, py + 2, 1, 1);
-    }
+    ctx.fillRect(Math.round(x - 5 * u), Math.round(y - 2 * u), Math.max(1, Math.round(2 * u)), Math.max(1, Math.round(2 * u)));
+    ctx.fillRect(Math.round(x + 3 * u), Math.round(y - 2 * u), Math.max(1, Math.round(2 * u)), Math.max(1, Math.round(2 * u)));
+    // 鞋靴
+    ctx.fillStyle = pal.ink;
+    ctx.fillRect(left - 1, top - 1, Math.round(bw) + 2, Math.round(bh) + 2);
+    ctx.fillStyle = '#fffdf4';
+    ctx.fillRect(left, top, Math.round(bw), Math.round(bh));
+    ctx.fillStyle = PIG.scarf;
+    ctx.fillRect(left, top, Math.round(bw), Math.max(1, Math.round(2 * u)));
+    ctx.fillStyle = '#dfe7ea';
+    ctx.fillRect(left, top + Math.round(bh) - Math.max(1, Math.round(2 * u)), Math.round(bw), Math.max(1, Math.round(u)));
   }
 
   function supportSide() {
@@ -1139,7 +1110,7 @@
   }
 
   // 单脚支撑时头顶的叹号，随失衡值变大、跳动
-  function drawWarnBang(x, y) {
+  function drawWarnBang(x, topY) {
     if (balance < 0.2) return;
     const k = Math.min(1, (balance - 0.2) / 0.45);
     const now = performance.now();
@@ -1150,7 +1121,7 @@
     const gap = 2 * s;
     const dotH = 2 * s;
     const cx = Math.round(x);
-    const top = Math.round(y - 50 - Math.sin(now * 0.012) * 2);
+    const top = Math.round(topY - Math.sin(now * 0.012) * 2);
 
     ctx.globalAlpha = k * pulse;
     // 墨色描边
@@ -1167,36 +1138,180 @@
     ctx.globalAlpha = 1;
   }
 
-  function drawSkates(tilt) {
+  function drawPigFigure(flail) {
+    const u = pigU();
+    const cx = VW / 2;
+    const ground = skateY;
+    const playing = state === 'playing' && !flail;
+    const ss = playing ? supportSide() : -1;
+    const now = performance.now();
+
+    const down0 = flail ? false : (feet[0].down || state === 'ready');
+    const down1 = flail ? false : (feet[1].down || state === 'ready');
+    const bothUp = flail || (!down0 && !down1);
+
+    const idle = (state === 'ready') ? Math.sin(now * 0.0025) * 0.9 * u : 0;
+    const bob = Math.max(feet[0].bob, feet[1].bob) * 2.2 * u + idle;
+    const sway = (down0 || down1) ? Math.sin(bobPhase * 2) * 0.9 * u : 0;
+    const lean = (playing && ss >= 0 && balance > 0.02)
+      ? (ss === 0 ? -1 : 1) * balance * 5 * u
+      : 0;
+    const shift = lean + sway;
+
+    const bodyBottom = ground - 25 * u - bob;
+    const bodyTop = bodyBottom - 33 * u;
+    const headTop = bodyTop - 22 * u;
+
+    // 地面影子
+    ctx.globalAlpha = 0.14;
+    ctx.fillStyle = pal.ink;
+    ctx.fillRect(Math.round(cx - 20 * u), Math.round(ground), Math.round(40 * u), Math.max(1, Math.round(1.5 * u)));
+    ctx.fillRect(Math.round(cx - 13 * u), Math.round(ground + 2 * u), Math.round(26 * u), Math.max(1, Math.round(1.5 * u)));
+    ctx.globalAlpha = 1;
+
+    // 腿与旱冰鞋
+    const wob = (playing && ss >= 0 && balance > 0.45)
+      ? Math.round(Math.sin(now * 0.05) * (balance - 0.45) * 5 * u)
+      : 0;
+
+    for (let i = 0; i < 2; i++) {
+      const dir = i === 0 ? -1 : 1;
+      const down = i === 0 ? down0 : down1;
+      const baseX = i === 0 ? skateL : skateR;
+      const footX = baseX + (ss === i ? wob : 0) - (down ? 0 : dir * 2 * u);
+      const lift = down ? 0 : (bothUp ? 10 * u : 14 * u);
+      const footY = ground - lift;
+      const hipX = cx + dir * 10 * u + shift;
+      const hipY = bodyBottom + 3 * u;
+
+      if (down) {
+        const kneeX = hipX + (footX - hipX) * 0.35 + dir * 3 * u;
+        const kneeY = hipY + (footY - hipY) * 0.55;
+        pigLimb(hipX, hipY, kneeX, kneeY, Math.max(4, Math.round(8 * u)));
+        pigLimb(kneeX, kneeY, footX, footY - 9 * u, Math.max(4, Math.round(8 * u)));
+      } else {
+        const kneeX = hipX + (footX - hipX) * 0.45 + dir * 3 * u;
+        const kneeY = hipY + (footY - hipY) * 0.55;
+        pigLimb(hipX, hipY, kneeX, kneeY, Math.max(4, Math.round(8 * u)));
+        pigLimb(kneeX, kneeY, footX, footY - 8 * u, Math.max(3, Math.round(7 * u)));
+      }
+
+      ctx.globalAlpha = down ? 0.15 : 0.07;
+      ctx.fillStyle = pal.ink;
+      ctx.fillRect(Math.round(baseX - 7 * u), Math.round(ground - 1), Math.round(14 * u), Math.max(1, Math.round(2 * u)));
+      ctx.globalAlpha = 1;
+      drawPigSkate(footX, footY, u);
+    }
+
+    // 身体
+    const bodyRows = [
+      { w: 26 * u, h: 4 * u },
+      { w: 38 * u, h: 8 * u },
+      { w: 46 * u, h: 12 * u },
+      { w: 40 * u, h: 6 * u },
+      { w: 30 * u, h: 3 * u }
+    ];
+    pigBlob(cx + shift, bodyTop, bodyRows, PIG.skin, PIG.skin2);
+
+    // 背部受光
+    ctx.fillStyle = PIG.light;
+    ctx.fillRect(Math.round(cx + shift - 18 * u), Math.round(bodyTop + 12 * u), Math.max(1, Math.round(4 * u)), Math.max(1, Math.round(10 * u)));
+
+    // 卷卷尾巴：屁股正中的一圈螺旋
+    const tx = cx + shift;
+    const ty = bodyTop + 24 * u;
+    ctx.strokeStyle = pal.ink;
+    ctx.lineWidth = Math.max(2, 2.4 * u);
+    ctx.beginPath();
+    ctx.arc(tx, ty, 5.4 * u, Math.PI * 0.62, Math.PI * 2.55);
+    ctx.stroke();
+    ctx.strokeStyle = PIG.skin3;
+    ctx.lineWidth = Math.max(1, 1.3 * u);
+    ctx.beginPath();
+    ctx.arc(tx, ty, 5.4 * u, Math.PI * 0.62, Math.PI * 2.55);
+    ctx.stroke();
+
+    // 手臂
+    for (let i = 0; i < 2; i++) {
+      const dir = i === 0 ? -1 : 1;
+      const down = i === 0 ? down0 : down1;
+      const sx = cx + shift + dir * 21 * u;
+      const sy = bodyTop + 9 * u;
+      let hx = sx + dir * 3 * u;
+      let hy = sy + 13 * u;
+      if (!down || bothUp) { hx = sx + dir * 8 * u; hy = sy + 2 * u; }
+      if (playing && balance > 0.55) { hx = sx + dir * 10 * u; hy = sy - 1 * u; }
+      pigLimb(sx, sy, hx, hy, Math.max(3, Math.round(5 * u)));
+      ctx.fillStyle = pal.ink;
+      ctx.fillRect(Math.round(hx) - Math.round(2 * u), Math.round(hy) - 1, Math.max(2, Math.round(3 * u)), Math.max(2, Math.round(2 * u)));
+    }
+
+    // 头
+    const headRows = [
+      { w: 14 * u, h: 3 * u },
+      { w: 22 * u, h: 6 * u },
+      { w: 26 * u, h: 9 * u },
+      { w: 22 * u, h: 5 * u },
+      { w: 14 * u, h: 2 * u }
+    ];
+    pigBlob(cx + shift, headTop, headRows, PIG.skin, PIG.skin2);
+    ctx.fillStyle = PIG.light;
+    ctx.fillRect(Math.round(cx + shift - 9 * u), Math.round(headTop + 4 * u), Math.max(1, Math.round(5 * u)), Math.max(1, Math.round(2 * u)));
+
+    // 猪耳：宽底三角形，向外张开
+    for (const dir of [-1, 1]) {
+      const tipX = cx + shift + dir * 12 * u;
+      const tipY = headTop - 4 * u;
+      const aX = cx + shift + dir * 3 * u;
+      const aY = headTop + 4 * u;
+      const bX = cx + shift + dir * 13 * u;
+      const bY = headTop + 7 * u;
+      ctx.beginPath();
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(aX, aY);
+      ctx.lineTo(bX, bY);
+      ctx.closePath();
+      ctx.fillStyle = PIG.skin;
+      ctx.fill();
+      ctx.strokeStyle = pal.ink;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // 围巾（背面看到的结与两条尾巴）
+    ctx.fillStyle = pal.ink;
+    ctx.fillRect(Math.round(cx + shift - 9 * u), Math.round(bodyTop - 1 * u), Math.round(18 * u), Math.round(4 * u));
+    ctx.fillStyle = PIG.scarf;
+    ctx.fillRect(Math.round(cx + shift - 8 * u), Math.round(bodyTop), Math.round(16 * u), Math.max(1, Math.round(2 * u)));
+    ctx.fillStyle = PIG.scarf2;
+    ctx.fillRect(Math.round(cx + shift + 2 * u), Math.round(bodyTop + 1 * u), Math.max(1, Math.round(3 * u)), Math.round(7 * u));
+    ctx.fillRect(Math.round(cx + shift + 5 * u), Math.round(bodyTop + 2 * u), Math.max(1, Math.round(2 * u)), Math.round(5 * u));
+
+    // 失衡提示：支撑脚光环 + 头顶叹号
+    if (playing && ss >= 0 && balance > 0.03) {
+      drawBalanceRing(ss === 0 ? skateL : skateR, ground);
+      drawWarnBang(cx + shift, headTop - 22 * u);
+    }
+  }
+
+  function drawPlayer(tilt) {
     if (state === 'falling' || state === 'over') {
       const t = state === 'over' ? 1 : Math.min(1, fallT / FALL_TIME);
       const e = t * t * (3 - 2 * t);
-      drawSkate(skateL - e * 26, skateY - e * 30, 0, false, true);
-      drawSkate(skateR + e * 30, skateY - e * 34, 1, false, true);
+      const dir = (fallCause === 'bothup' || fallCause === 'hit') ? 1 : -1;
+      ctx.save();
+      ctx.translate(VW / 2, skateY);
+      ctx.rotate(e * 0.55 * dir);
+      ctx.translate(-VW / 2, -skateY - e * 4);
+      drawPigFigure(true);
+      ctx.restore();
       return;
     }
-    const ready = state === 'ready';
-
     ctx.save();
     ctx.translate(VW / 2, skateY);
     ctx.rotate(tilt);
     ctx.translate(-VW / 2, -skateY);
-
-    // 失衡时支撑脚轻微发抖
-    const ss = state === 'playing' ? supportSide() : -1;
-    const wob = (ss >= 0 && balance > 0.45)
-      ? Math.round(Math.sin(performance.now() * 0.05) * (balance - 0.45) * 6)
-      : 0;
-
-    drawSkate(skateL + (ss === 0 ? wob : 0), skateY, 0, ready || feet[0].down, false);
-    drawSkate(skateR + (ss === 1 ? wob : 0), skateY, 1, ready || feet[1].down, false);
-
-    // 单脚支撑：脚下进度环 + 头顶叹气号
-    if (ss >= 0 && balance > 0.03) {
-      const bx = ss === 0 ? skateL : skateR;
-      drawBalanceRing(bx, skateY);
-      drawWarnBang(bx, skateY);
-    }
+    drawPigFigure(false);
     ctx.restore();
   }
 
@@ -1306,15 +1421,6 @@
       ctx.globalAlpha = 1;
     }
 
-    // 冲刺边缘光
-    if (dashT > 0) {
-      ctx.globalAlpha = Math.min(0.5, dashT / 0.9 * 0.5);
-      ctx.fillStyle = DANGER;
-      ctx.fillRect(0, 0, 2, VH);
-      ctx.fillRect(VW - 2, 0, 2, VH);
-      ctx.globalAlpha = 1;
-    }
-
     for (const p of particles) {
       ctx.globalAlpha = Math.max(0, 1 - p.t / p.life);
       ctx.fillStyle = pal.ink;
@@ -1334,7 +1440,6 @@
 
   function drawHUDText() {
     if (state !== 'playing') return;
-    const now = performance.now();
 
     if (mult() > 1) {
       ctx.textAlign = 'right';
@@ -1344,20 +1449,6 @@
       ctx.fillText('×' + mult(), VW - 5, 7);
       ctx.fillStyle = DANGER;
       ctx.fillText('×' + mult(), VW - 6, 6);
-    }
-
-    if (charge > 0.02 || chargeReady) {
-      const bw = 34;
-      const bx = Math.round(VW / 2 - bw / 2);
-      const by = VH - 12;
-      ctx.globalAlpha = 0.3;
-      ctx.fillStyle = pal.ink;
-      ctx.fillRect(bx - 1, by - 1, bw + 2, 4);
-      ctx.globalAlpha = 0.9;
-      const blink = chargeReady ? (0.55 + 0.45 * Math.sin(now * 0.012)) : 1;
-      ctx.fillStyle = chargeReady ? DANGER : '#ffffff';
-      ctx.fillRect(bx, by, Math.round(bw * (chargeReady ? 1 : charge)), 2);
-      ctx.globalAlpha = 1;
     }
 
     ctx.textAlign = 'left';
@@ -1415,7 +1506,7 @@
     drawTunnel();
     ctx.restore();
 
-    drawSkates(tilt);
+    drawPlayer(tilt);
     drawEffects();
     drawHUDText();
   }
