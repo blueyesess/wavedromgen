@@ -9,25 +9,34 @@
   :root { --ink:#111111; --paper:#ffffff; --danger:#FF5A1F; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html, body {
-    margin:0; height:100%; background:var(--paper); overflow:hidden;
+    margin:0; height:100%; background:#fff; overflow:hidden;
     overscroll-behavior:none; -webkit-user-select:none; user-select:none;
   }
-  body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:var(--ink); }
-  canvas { display:block; position:fixed; inset:0; touch-action:none; }
+  body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:#111; }
+  canvas {
+    display:block; position:fixed; inset:0; width:100%; height:100%;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+    touch-action:none;
+  }
   #hud {
-    position:fixed; top:calc(env(safe-area-inset-top) + 16px); left:0; right:0;
-    text-align:center; font-size:22px; letter-spacing:.14em; opacity:.75;
+    position:fixed; top:calc(env(safe-area-inset-top) + 14px); left:0; right:0;
+    text-align:center; font-size:18px; letter-spacing:.2em; opacity:.75;
     pointer-events:none; font-variant-numeric:tabular-nums;
   }
   #overlay {
     position:fixed; inset:0; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; gap:14px; text-align:center;
-    pointer-events:none; transition:opacity .18s ease;
+    align-items:center; justify-content:center; gap:12px; text-align:center;
+    pointer-events:none; transition:opacity .16s ease;
   }
   #overlay.hide { opacity:0; }
-  .big { font-size:min(18vw, 86px); font-weight:500; letter-spacing:.02em; line-height:1; font-variant-numeric:tabular-nums; }
-  .sub { font-size:13px; letter-spacing:.12em; opacity:.55; }
-  .hint { margin-top:10px; font-size:12px; letter-spacing:.28em; opacity:.35; animation:breathe 2.4s ease-in-out infinite; }
+  #overlay::before {
+    content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+    background: radial-gradient(ellipse at 50% 50%, rgba(255,255,255,.94) 0%, rgba(255,255,255,.72) 30%, rgba(255,255,255,0) 62%);
+  }
+  #overlay > * { position:relative; z-index:1; }
+  .big { font-size:min(17vw, 76px); font-weight:500; letter-spacing:.04em; line-height:1; font-variant-numeric:tabular-nums; }
+  .sub { font-size:12px; letter-spacing:.14em; opacity:.55; }
+  .hint { margin-top:8px; font-size:11px; letter-spacing:.3em; opacity:.35; animation:breathe 2.4s ease-in-out infinite; }
   @keyframes breathe { 0%,100% { opacity:.18 } 50% { opacity:.55 } }
   @media (prefers-reduced-motion: reduce) { .hint { animation:none; } }
 </style>
@@ -37,7 +46,7 @@
 <div id="hud">0</div>
 <div id="overlay">
   <div class="big">一步</div>
-  <div class="sub">按住前进 · 抬脚越过障碍</div>
+  <div class="sub">按住向前滑 · 抬脚越过障碍</div>
   <div class="hint">按住开始</div>
 </div>
 <script>
@@ -45,48 +54,55 @@
   'use strict';
 
   const canvas = document.getElementById('c');
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { alpha: false });
   const hud = document.getElementById('hud');
   const overlay = document.getElementById('overlay');
 
   const INK = '#111111';
   const PAPER = '#ffffff';
   const DANGER = '#FF5A1F';
+  const GRAY = '#6f6f69';
+  const LIGHT = '#e9e9e3';
 
-  const R = 13;              // 脚的半径
-  const HIT_R = 9;           // 更宽容的碰撞半径
-  const BOTH_UP_GRACE = 0.16; // 双脚离屏允许的容错时间（秒）
-  const BASE_SPEED = 250;    // 按住时的基础速度
-  const MAX_SPEED = 430;     // 速度上限
+  /* ---------------- 世界参数 ---------------- */
+  const Z_FAR = 150;
+  const Z_NEAR = 8;
+  const HIT_Z = 10;
+  const BOTH_UP_GRACE = 0.16;
+  const FALL_TIME = 0.82;
 
-  let W = 0, H = 0, DPR = 1, horizon = 0;
+  let VW = 180, VH = 320, DPR = 1;
+  let horizon = 0, FOCAL = 0, S_HIT = 1;
+  let LANE = 2.2, ROAD_HALF = 8, CAM_H = 9.2;
+  let skateL = 0, skateR = 0, skateY = 0;
 
+  /* ---------------- 状态 ---------------- */
   const feet = [
-    { x: 0, sources: new Set(), down: false, bob: 0 },
-    { x: 0, sources: new Set(), down: false, bob: 0 }
+    { sources: new Set(), down: false, bob: 0 },
+    { sources: new Set(), down: false, bob: 0 }
   ];
 
-  let state = 'ready'; // ready | playing | over
+  let state = 'ready'; // ready | playing | falling | over
   let dist = 0;
   let speed = 0;
   let bothUpT = 0;
   let obstacles = [];
   let coins = [];
-  let ripples = [];
+  let props = [];
   let spawnClock = 0;
   let spawnInterval = 1.85;
   let score = 0;
-  let hitFlash = 0;
-  let overAt = 0;
-  let shake = 0;
-  let lastTime = 0;
   let best = 0;
+  let fallT = 0;
+  let overAt = 0;
+  let bobPhase = 0;
+  let bobY = 0;
+  let particles = [];
 
   try { best = parseInt(localStorage.getItem('yibu.best.score') || '0', 10) || 0; } catch (e) {}
 
-  /* ---------------- audio ---------------- */
-  let ac = null;
-  let master = null;
+  /* ---------------- 音频 ---------------- */
+  let ac = null, master = null;
 
   function audio() {
     if (ac) return;
@@ -95,82 +111,115 @@
     ac = new AC();
     if (ac.state === 'suspended') ac.resume();
     master = ac.createGain();
-    master.gain.value = 0.22;
+    master.gain.value = 0.2;
     master.connect(ac.destination);
   }
 
-  function blip(freq, dur, type, vol, slideTo) {
+  function blip(freq, dur, type, vol, slideTo, delay) {
     if (!ac) return;
-    const t0 = ac.currentTime;
+    const t0 = ac.currentTime + (delay || 0);
     const osc = ac.createOscillator();
     const gain = ac.createGain();
-    osc.type = type || 'sine';
+    osc.type = type || 'square';
     osc.frequency.setValueAtTime(freq, t0);
     if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
     gain.gain.setValueAtTime(0.0001, t0);
-    gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.006);
+    gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.008);
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     osc.connect(gain);
     gain.connect(master);
     osc.start(t0);
-    osc.stop(t0 + dur + 0.02);
+    osc.stop(t0 + dur + 0.03);
   }
 
-  function sfxStep(side) {
-    blip(side === 0 ? 196 : 147, 0.07, 'triangle', 0.5);
-  }
-  function sfxPass() {
-    blip(440, 0.04, 'sine', 0.18);
-  }
-  function sfxCoin() {
-    blip(660, 0.07, 'triangle', 0.45);
-    blip(990, 0.09, 'triangle', 0.28);
-  }
-  function sfxHit() {
-    blip(150, 0.32, 'sawtooth', 0.7, 45);
+  function sfxStep(side) { blip(side === 0 ? 220 : 165, 0.06, 'square', 0.35); }
+  function sfxPass() { blip(520, 0.035, 'square', 0.14); }
+  function sfxCoin() { blip(720, 0.06, 'square', 0.32); blip(1080, 0.07, 'square', 0.2, null, 0.05); }
+  function sfxFall() {
+    blip(190, 0.28, 'sawtooth', 0.5, 60);
+    blip(90, 0.4, 'square', 0.4, 40, 0.05);
   }
 
-  /* ---------------- layout ---------------- */
+  /* ---------------- 布局 ---------------- */
   function resize() {
-    DPR = Math.min(window.devicePixelRatio || 1, 2);
-    W = window.innerWidth;
-    H = window.innerHeight;
-    canvas.width = Math.round(W * DPR);
-    canvas.height = Math.round(H * DPR);
-    canvas.style.width = W + 'px';
-    canvas.style.height = H + 'px';
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    horizon = Math.round(H * 0.66);
-    feet[0].x = Math.round(W * 0.42);
-    feet[1].x = Math.round(W * 0.64);
+    const w = window.innerWidth, h = window.innerHeight;
+    DPR = Math.min(window.devicePixelRatio || 1, 3);
+    if (h >= w) {
+      VW = 180;
+      VH = Math.max(240, Math.min(430, Math.round(VW * h / w)));
+    } else {
+      VH = 180;
+      VW = Math.max(260, Math.min(430, Math.round(VH * w / h)));
+    }
+    canvas.width = VW;
+    canvas.height = VH;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    ctx.imageSmoothingEnabled = false;
+
+    horizon = Math.round(VH * 0.46);
+    FOCAL = VH * 0.5;
+    S_HIT = FOCAL / HIT_Z;
+    LANE = (0.24 * VW) / S_HIT;
+    ROAD_HALF = (0.92 * VW) / S_HIT;
+    CAM_H = (VH * 0.92 - horizon) / S_HIT;
+
+    skateL = Math.round(VW * 0.26);
+    skateR = Math.round(VW * 0.74);
+    skateY = Math.round(horizon + CAM_H * S_HIT) - 2;
   }
 
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', () => setTimeout(resize, 120));
 
-  /* ---------------- game ---------------- */
+  /* ---------------- 投影 ---------------- */
+  function project(xw, z) {
+    const s = FOCAL / Math.max(1, z);
+    const c = Math.sin((dist + z) * 0.02) * (z / Z_FAR) * 3.2;
+    return {
+      x: VW / 2 + (xw + c) * s,
+      y: horizon + CAM_H * s + bobY,
+      s: s
+    };
+  }
+
+  /* ---------------- 游戏流程 ---------------- */
   function setScore(n) {
     score = n;
     hud.textContent = String(score);
   }
 
+  function resetProps() {
+    props = [];
+    for (let i = 0; i < 12; i++) props.push(newProp(Z_NEAR + (i + 0.5) * (Z_FAR / 12)));
+  }
+
+  function newProp(z) {
+    return {
+      z: z,
+      x: (Math.random() < 0.5 ? -1 : 1) * (ROAD_HALF + 2.5 + Math.random() * 7),
+      h: 7 + Math.random() * 15
+    };
+  }
+
   function reset() {
     dist = 0;
     speed = 0;
-    bothUpT = -1.0; // 开局给一点宽容时间
+    bothUpT = -1;
     obstacles = [];
     coins = [];
-    ripples = [];
-    spawnClock = 0.5;
+    particles = [];
+    spawnClock = 0.4;
     spawnInterval = 1.85;
-    hitFlash = 0;
-    shake = 0;
-    feet.forEach((f) => {
-      f.sources.clear();
-      f.bob = 0;
-      f.down = false;
-    });
+    fallT = 0;
+    bobPhase = 0;
+    bobY = 0;
+    feet.forEach((f) => { f.sources.clear(); f.bob = 0; f.down = false; });
+    resetProps();
     setScore(0);
+    // 开局就放一组目标，避免前几秒空跑
+    addObstacle(randLane(), 95);
+    addCoin(randLane(), 62);
   }
 
   function toPlaying() {
@@ -189,23 +238,38 @@
     overlay.classList.remove('hide');
     overlay.innerHTML =
       '<div class="big">一步</div>' +
-      '<div class="sub">按住前进 · 抬脚越过障碍</div>' +
+      '<div class="sub">按住向前滑 · 抬脚越过障碍</div>' +
       (best > 0 ? '<div class="sub">最佳 ' + best + '</div>' : '') +
       '<div class="hint">按住开始</div>';
   }
 
-  function fail() {
+  // 摔倒：两种失败共用这一段动画
+  function fall() {
     if (state !== 'playing') return;
+    state = 'falling';
+    fallT = 0;
+    bothUpT = 0;
+    sfxFall();
+    for (let i = 0; i < 14; i++) {
+      particles.push({
+        x: VW / 2 + (Math.random() - 0.5) * 40,
+        y: VH - 8,
+        vx: (Math.random() - 0.5) * 120,
+        vy: -30 - Math.random() * 90,
+        life: 0.5 + Math.random() * 0.35,
+        t: 0
+      });
+    }
+  }
+
+  function finishOver() {
     state = 'over';
     overAt = performance.now();
-    hitFlash = 1;
-    shake = 1;
     const isNewBest = score > best;
     if (isNewBest) {
       best = score;
       try { localStorage.setItem('yibu.best.score', String(best)); } catch (e) {}
     }
-    sfxHit();
     overlay.classList.remove('hide');
     overlay.innerHTML =
       '<div class="big">' + score + '</div>' +
@@ -216,64 +280,57 @@
   function doStep(side) {
     if (state !== 'playing') return;
     feet[side].bob = 1;
-    ripples.push({ x: feet[side].x, y: horizon - 4, t: 0, strong: false });
     sfxStep(side);
   }
 
-  function randLane() {
-    return Math.random() < 0.5 ? 0 : 1;
+  /* ---------------- 生成 ---------------- */
+  const OBS_TYPES = [
+    { type: 'rock', wf: 1.25, hf: 0.9 },
+    { type: 'cone', wf: 0.7, hf: 1.3 },
+    { type: 'barrier', wf: 1.8, hf: 0.55 }
+  ];
+
+  function randLane() { return Math.random() < 0.5 ? 0 : 1; }
+
+  function addObstacle(lane, z) {
+    const t = OBS_TYPES[Math.floor(Math.random() * OBS_TYPES.length)];
+    obstacles.push({ lane: lane, z: z, type: t.type, wf: t.wf, hf: t.hf });
   }
 
-  function addObstacle(lane, x) {
-    obstacles.push({
-      lane: lane,
-      x: x,
-      w: Math.random() < 0.35 ? 18 : 7,
-      h: Math.random() < 0.35 ? 34 : 22,
-      hit: false,
-      counted: false
-    });
+  function addCoin(lane, z) {
+    coins.push({ lane: lane, z: z, missed: false });
   }
 
-  function addCoin(lane, x) {
-    coins.push({ lane: lane, x: x, done: false, missed: false });
-  }
-
-  // 障碍按“图案”生成，而不是纯随机：更容易学会，也更少冤枉
   function spawnBeat() {
-    const lead = W + 40;
-    const stepPx = Math.max(BASE_SPEED, speed);
+    const gap = Math.max(26, speed);
     const r = Math.random();
+    const z = Z_FAR;
 
     if (score < 5) {
-      if (r < 0.55) addObstacle(randLane(), lead);
-      else addCoin(randLane(), lead);
+      if (r < 0.55) addObstacle(randLane(), z);
+      else addCoin(randLane(), z);
       return;
     }
 
     if (r < 0.42) {
-      addObstacle(randLane(), lead);
+      addObstacle(randLane(), z);
     } else if (r < 0.66) {
       const a = randLane();
-      addObstacle(a, lead);
-      addObstacle(1 - a, lead + stepPx * 0.5);
+      addObstacle(a, z);
+      addObstacle(1 - a, z + gap * 0.55);
     } else if (r < 0.86) {
       const l = randLane();
-      addCoin(l, lead);
-      addCoin(l, lead + stepPx * 0.22);
+      addCoin(l, z);
+      addCoin(l, z + gap * 0.22);
     } else {
       const l = randLane();
-      addObstacle(l, lead);
-      addCoin(1 - l, lead + stepPx * 0.3);
+      addObstacle(l, z);
+      addCoin(1 - l, z + gap * 0.32);
     }
   }
 
-  /* ---------------- input ---------------- */
+  /* ---------------- 输入 ---------------- */
   const pointerSide = new Map();
-
-  function sideAt(x) {
-    return x < W / 2 ? 0 : 1;
-  }
 
   function press(side, id) {
     const f = feet[side];
@@ -286,18 +343,21 @@
     feet[side].sources.delete(id);
   }
 
-  function onPointerDown(e) {
+  function sideAt(x) {
+    return x < window.innerWidth / 2 ? 0 : 1;
+  }
+
+  function onDown(e) {
     e.preventDefault();
     audio();
 
     if (state === 'ready') {
-      start(); // 这一下也算第一步
+      start();
     } else if (state === 'over') {
-      if (performance.now() - overAt > 420) {
-        toPlaying(); // 重开后手指仍按着，继续前进
-      } else {
-        return;
-      }
+      if (performance.now() - overAt > 420) toPlaying();
+      else return;
+    } else if (state === 'falling') {
+      return;
     }
     if (state !== 'playing') return;
 
@@ -306,16 +366,16 @@
     press(side, 'p' + e.pointerId);
   }
 
-  function onPointerUp(e) {
+  function onUp(e) {
     const side = pointerSide.get(e.pointerId);
     if (side === undefined) return;
     pointerSide.delete(e.pointerId);
     release(side, 'p' + e.pointerId);
   }
 
-  canvas.addEventListener('pointerdown', onPointerDown, { passive: false });
-  window.addEventListener('pointerup', onPointerUp);
-  window.addEventListener('pointercancel', onPointerUp);
+  canvas.addEventListener('pointerdown', onDown, { passive: false });
+  window.addEventListener('pointerup', onUp);
+  window.addEventListener('pointercancel', onUp);
   window.addEventListener('blur', () => {
     pointerSide.forEach((side, id) => release(side, 'p' + id));
     pointerSide.clear();
@@ -333,11 +393,10 @@
     if (state === 'ready') {
       start();
     } else if (state === 'over') {
-      if (performance.now() - overAt > 420) {
-        toPlaying();
-      } else {
-        return;
-      }
+      if (performance.now() - overAt > 420) toPlaying();
+      else return;
+    } else if (state === 'falling') {
+      return;
     }
     if (state !== 'playing') return;
 
@@ -360,191 +419,419 @@
 
   window.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  /* ---------------- update ---------------- */
+  /* ---------------- 更新 ---------------- */
   function update(dt) {
     for (const f of feet) f.down = f.sources.size > 0;
 
     if (state === 'playing') {
-      // 只要还有手指按住屏幕，画面就持续前进；分数越高越快
       const anyDown = feet[0].down || feet[1].down;
-      const target = anyDown ? Math.min(MAX_SPEED, BASE_SPEED + score * 3) : 0;
-      speed += (target - speed) * Math.min(1, dt * 14);
-      if (!anyDown && speed < 6) speed = 0;
+      const target = anyDown ? 26 + Math.min(24, score * 0.6) : 0;
+      speed += (target - speed) * Math.min(1, dt * 8);
+      if (!anyDown && speed < 4) speed = 0;
       dist += speed * dt;
+      bobPhase += speed * dt * 0.22;
+      bobY = Math.sin(bobPhase) * 0.9;
 
-      // 双脚离屏判定
       const bothUp = !feet[0].down && !feet[1].down;
       if (bothUp) {
         bothUpT += dt;
-        if (bothUpT > BOTH_UP_GRACE) fail();
+        if (bothUpT > BOTH_UP_GRACE) fall();
       } else {
         bothUpT = 0;
       }
 
-      // 障碍
-      for (const o of obstacles) {
-        o.x -= speed * dt;
-        if (!o.hit) {
-          // 双脚都离屏时，不具备“抬脚躲过”的资格
-          const live = feet[o.lane].down || bothUpT > 0.05;
-          if (live) {
-            const fx = feet[o.lane].x;
-            if (o.x < fx + HIT_R && o.x + o.w > fx - HIT_R) {
-              o.hit = true;
-              fail();
-              break;
-            }
-          }
-        }
-        if (!o.counted && o.x + o.w < feet[o.lane].x - 20) {
-          o.counted = true;
-          setScore(score + 1);
-          sfxPass();
-        }
-      }
-      obstacles = obstacles.filter((o) => o.x + o.w > -60);
-
-      // 金色地砖：踩中加分，抬脚让过不加分
-      for (const c of coins) {
-        if (state !== 'playing') break;
-        c.x -= speed * dt;
-        if (!c.done) {
-          const fx = feet[c.lane].x;
-          if (Math.abs(c.x - fx) < 13) {
-            c.done = true;
-            if (feet[c.lane].down) {
-              setScore(score + 1);
-              ripples.push({ x: fx, y: horizon - 4, t: 0, strong: true });
-              sfxCoin();
-            } else {
-              c.missed = true;
-            }
-          }
-        }
-      }
-      coins = coins.filter((c) => c.x > -40);
-
-      // 生成节奏
       if (state === 'playing') {
-        spawnClock += dt;
-        if (spawnClock >= spawnInterval) {
-          spawnClock = 0;
-          spawnBeat();
-          spawnInterval = Math.max(0.85, 1.85 - score * 0.02);
+        // 障碍
+        for (const o of obstacles) {
+          o.z -= speed * dt;
+          if (!o.done && o.z <= HIT_Z) {
+            o.done = true;
+            if (feet[o.lane].down) {
+              fall();
+              break;
+            } else {
+              setScore(score + 1);
+              sfxPass();
+            }
+          }
         }
+        obstacles = obstacles.filter((o) => o.z > Z_NEAR - 3);
+
+        // 金币地砖：鞋在上面才踩中
+        if (state === 'playing') {
+          for (const c of coins) {
+            c.z -= speed * dt;
+            if (!c.done && c.z <= HIT_Z) {
+              c.done = true;
+              if (feet[c.lane].down) {
+                setScore(score + 1);
+                sfxCoin();
+                const p = project(c.lane === 0 ? -LANE : LANE, HIT_Z);
+                for (let i = 0; i < 5; i++) {
+                  particles.push({
+                    x: p.x, y: p.y - 2,
+                    vx: (Math.random() - 0.5) * 40,
+                    vy: -20 - Math.random() * 30,
+                    life: 0.3, t: 0
+                  });
+                }
+              } else {
+                c.missed = true;
+              }
+            }
+          }
+          coins = coins.filter((c) => c.z > Z_NEAR - 3);
+
+          // 生成节奏
+          spawnClock += dt;
+          if (spawnClock >= spawnInterval) {
+            spawnClock = 0;
+            spawnBeat();
+            spawnInterval = Math.max(0.85, 1.85 - score * 0.02);
+          }
+        }
+      }
+    } else if (state === 'falling') {
+      fallT += dt;
+      speed *= Math.max(0, 1 - dt * 5);
+      dist += speed * dt;
+      if (fallT >= FALL_TIME) finishOver();
+    }
+
+    // 路边景物
+    for (const p of props) {
+      p.z -= speed * dt;
+      if (p.z < Z_NEAR) {
+        const np = newProp(Z_FAR + Math.random() * 12);
+        p.z = np.z; p.x = np.x; p.h = np.h;
       }
     }
 
-    for (const f of feet) f.bob = Math.max(0, f.bob - dt * 4);
-    for (const r of ripples) r.t += dt;
-    ripples = ripples.filter((r) => r.t < 0.5);
-    hitFlash = Math.max(0, hitFlash - dt * 4);
-    shake = Math.max(0, shake - dt * 5);
+    for (const f of feet) f.bob = Math.max(0, f.bob - dt * 2.6);
+    for (const p of particles) {
+      p.t += dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 180 * dt;
+    }
+    particles = particles.filter((p) => p.t < p.life);
   }
 
-  /* ---------------- draw ---------------- */
-  function draw() {
-    ctx.save();
+  /* ---------------- 绘制：像素元素 ---------------- */
+  function drawSkyline() {
+    ctx.fillStyle = '#ededE7';
+    const n = Math.ceil(VW / 16) + 3;
+    const scroll = (dist * 1.1) % 16;
+    for (let i = 0; i < n; i++) {
+      const bx = Math.round(i * 16 - scroll - 8);
+      const bh = 5 + ((i * 13) % 15);
+      ctx.fillRect(bx, horizon - bh, 11, bh);
+    }
+    ctx.fillStyle = '#f6f6f1';
+    for (let i = 0; i < n; i++) {
+      const bx = Math.round(i * 16 - scroll - 8);
+      const bh = 5 + ((i * 7) % 9);
+      ctx.fillRect(bx + 2, horizon - bh, 7, bh);
+    }
+  }
 
-    if (shake > 0) {
-      const s = shake * 6;
-      ctx.translate((Math.random() - 0.5) * s, (Math.random() - 0.5) * s);
+  function drawRoad() {
+    // 路面
+    for (let z = Z_NEAR; z < Z_FAR; z += 6) {
+      const a = project(-ROAD_HALF, z);
+      const b = project(ROAD_HALF, z);
+      const c = project(ROAD_HALF, z + 6.4);
+      const d = project(-ROAD_HALF, z + 6.4);
+      ctx.fillStyle = '#eaeae2';
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.lineTo(c.x, c.y);
+      ctx.lineTo(d.x, d.y);
+      ctx.closePath();
+      ctx.fill();
     }
 
-    ctx.fillStyle = PAPER;
-    ctx.fillRect(-20, -20, W + 40, H + 40);
+    // 地面接缝：用来传达速度
+    for (let z = Z_NEAR; z < Z_FAR; z += 2) {
+      if (((z + dist) % 12) >= 2) continue;
+      const a = project(-ROAD_HALF, z);
+      const b = project(ROAD_HALF, z);
+      const c = project(ROAD_HALF, z + 2);
+      const d = project(-ROAD_HALF, z + 2);
+      ctx.fillStyle = '#dcdad1';
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.lineTo(c.x, c.y);
+      ctx.lineTo(d.x, d.y);
+      ctx.closePath();
+      ctx.fill();
+    }
 
-    // 地平线
-    ctx.globalAlpha = 0.9;
+    // 边线（连续）
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      for (let z = Z_NEAR; z <= Z_FAR; z += 6) {
+        const p = project(side * ROAD_HALF, z);
+        if (z === Z_NEAR) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      }
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // 中线虚线
+    for (let z = Z_NEAR; z < Z_FAR; z += 4) {
+      if (((z + dist) % 16) < 8) {
+        const a = project(0, z);
+        const b = project(0, z + 3.6);
+        const w = Math.max(1, Math.round(0.22 * a.s));
+        ctx.fillStyle = '#cfcec4';
+        ctx.fillRect(Math.round(a.x - w / 2), Math.round(a.y), w, Math.max(1, Math.round(b.y - a.y)));
+      }
+    }
+  }
+
+  function drawProps() {
+    const list = props.slice().sort((p, q) => q.z - p.z);
+    for (const p of list) {
+      if (p.z <= Z_NEAR) continue;
+      const a = project(p.x, p.z);
+      if (a.x < -20 || a.x > VW + 20) continue;
+      const w = Math.max(1, Math.round(0.55 * a.s));
+      const h = Math.round(p.h * a.s);
+      ctx.fillStyle = '#d5d5cf';
+      ctx.fillRect(Math.round(a.x - w / 2), Math.round(a.y - h), w, h);
+      ctx.fillStyle = GRAY;
+      ctx.fillRect(Math.round(a.x - w / 2), Math.round(a.y - h), w, Math.max(1, Math.round(w * 0.6)));
+    }
+  }
+
+  function drawRock(x, y, w, h) {
+    const w1 = Math.max(2, Math.round(w));
+    const h1 = Math.max(2, Math.round(h));
+    const left = Math.round(x - w1 / 2);
+    const top = Math.round(y - h1);
+    ctx.fillStyle = '#575752';
+    ctx.fillRect(left, top + Math.round(h1 * 0.3), w1, h1 - Math.round(h1 * 0.3));
+    ctx.fillRect(left + Math.round(w1 * 0.16), top, Math.round(w1 * 0.68), Math.round(h1 * 0.45));
+    ctx.fillStyle = '#8b8b84';
+    ctx.fillRect(left + Math.round(w1 * 0.24), top + Math.round(h1 * 0.12), Math.max(1, Math.round(w1 * 0.26)), Math.max(1, Math.round(h1 * 0.3)));
+  }
+
+  function drawCone(x, y, w, h) {
+    const w1 = Math.max(2, Math.round(w));
+    const h1 = Math.max(2, Math.round(h));
+    const left = Math.round(x - w1 / 2);
+    const top = Math.round(y - h1);
+    // 锥体
+    for (let i = 0; i < 4; i++) {
+      const t = i / 4;
+      const ww = Math.max(1, Math.round(w1 * (1 - t * 0.62)));
+      ctx.fillStyle = (i === 1) ? PAPER : DANGER;
+      ctx.fillRect(Math.round(x - ww / 2), Math.round(top + h1 * t), ww, Math.max(1, Math.round(h1 / 4)));
+    }
+    // 底座
+    ctx.fillStyle = INK;
+    ctx.fillRect(left - Math.round(w1 * 0.18), y - Math.max(1, Math.round(h1 * 0.08)), Math.round(w1 * 1.36), Math.max(1, Math.round(h1 * 0.08)));
+  }
+
+  function drawBarrier(x, y, w, h) {
+    const w1 = Math.max(3, Math.round(w));
+    const h1 = Math.max(2, Math.round(h));
+    const left = Math.round(x - w1 / 2);
+    const top = Math.round(y - h1);
+    ctx.fillStyle = DANGER;
+    ctx.fillRect(left, top, w1, h1);
+    ctx.fillStyle = INK;
+    const step = Math.max(3, Math.round(w1 / 4));
+    for (let sx = left; sx < left + w1; sx += step * 2) {
+      ctx.fillRect(sx, top, Math.max(1, Math.round(step * 0.6)), h1);
+    }
+    ctx.fillRect(left, y - 1, 1, Math.round(h1 * 0.6));
+    ctx.fillRect(left + w1 - 1, y - 1, 1, Math.round(h1 * 0.6));
+  }
+
+  function drawCoinMarker(lane, z, missed) {
+    if (z < 14) return;
+    const xw = lane === 0 ? -LANE : LANE;
+    const hw = LANE * 0.55;
+    const dep = Math.max(2.2, LANE * 1.1);
+    const a = project(xw - hw, z);
+    const b = project(xw + hw, z);
+    const c = project(xw + hw, z + dep);
+    const d = project(xw - hw, z + dep);
+
+    ctx.globalAlpha = missed ? 0.22 : 0.8;
     ctx.strokeStyle = INK;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(0, horizon + 0.5);
-    ctx.lineTo(W, horizon + 0.5);
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.lineTo(c.x, c.y);
+    ctx.lineTo(d.x, d.y);
+    ctx.closePath();
     ctx.stroke();
 
-    // 地面刻度，用来传达速度
-    ctx.globalAlpha = 0.12;
-    ctx.lineWidth = 2;
-    const offset = dist % 56;
-    for (let x = -offset; x < W; x += 56) {
-      ctx.beginPath();
-      ctx.moveTo(x, horizon + 15);
-      ctx.lineTo(x + 26, horizon + 15);
-      ctx.stroke();
-    }
+    const m = project(xw, z + dep * 0.5);
+    ctx.fillStyle = INK;
+    ctx.fillRect(Math.round(m.x), Math.round(m.y), 2, 2);
     ctx.globalAlpha = 1;
+  }
 
-    // 涟漪
-    for (const r of ripples) {
-      const p = r.t / 0.5;
-      ctx.globalAlpha = (r.strong ? 0.28 : 0.16) * (1 - p);
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = r.strong ? 2 : 1.5;
-      ctx.beginPath();
-      ctx.arc(r.x, r.y, 8 + p * 22, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
+  function drawObjects() {
+    const list = obstacles.map((o) => ({ kind: 'obs', lane: o.lane, z: o.z, type: o.type, wf: o.wf, hf: o.hf }))
+      .concat(coins.map((c) => ({ kind: 'coin', lane: c.lane, z: c.z, missed: c.missed })));
+    list.sort((a, b) => b.z - a.z);
 
-    // 金色地砖（踩中得分）
-    for (const c of coins) {
-      if (c.done && !c.missed) continue;
-      ctx.globalAlpha = c.missed ? 0.18 : 0.9;
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(c.x, horizon - 6, 6, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
+    for (const it of list) {
+      if (it.z <= Z_NEAR - 2) continue;
+      if (it.kind === 'obs' && it.z < HIT_Z + 0.5) continue;
+      const xw = it.lane === 0 ? -LANE : LANE;
+      const p = project(xw, it.z);
+      if (p.x < -40 || p.x > VW + 40) continue;
 
-    // 障碍
-    for (const o of obstacles) {
-      ctx.fillStyle = o.hit ? '#c9c9c6' : DANGER;
-      ctx.fillRect(o.x, horizon - o.h, o.w, o.h);
-    }
-
-    // 脚
-    feet.forEach((f) => {
-      const y = horizon - 4;
-      if (f.down) {
-        const bob = f.bob * 2;
-        ctx.fillStyle = PAPER;
-        ctx.beginPath();
-        ctx.arc(f.x, y - bob, R + 4, 0, Math.PI * 2);
-        ctx.fill();
+      // 影子
+      if (it.z < 60) {
+        ctx.globalAlpha = Math.max(0, 0.16 * (1 - it.z / 60));
         ctx.fillStyle = INK;
-        ctx.beginPath();
-        ctx.arc(f.x, y - bob, R, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        ctx.globalAlpha = 0.45;
-        ctx.strokeStyle = INK;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(f.x, y - 13, R - 2, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.fillRect(Math.round(p.x - 4 * p.s * 0.4), Math.round(p.y - 1), Math.max(1, Math.round(8 * p.s * 0.4)), 1);
         ctx.globalAlpha = 1;
       }
-    });
 
-    ctx.restore();
+      if (it.kind === 'coin') {
+        drawCoinMarker(it.lane, it.z, it.missed);
+        continue;
+      }
 
-    if (hitFlash > 0) {
-      ctx.globalAlpha = hitFlash * 0.14;
-      ctx.fillStyle = DANGER;
-      ctx.fillRect(0, 0, W, H);
+      const w = it.wf * LANE * p.s;
+      const h = it.hf * LANE * p.s;
+      if (it.type === 'rock') drawRock(p.x, p.y, w, h);
+      else if (it.type === 'cone') drawCone(p.x, p.y, w, h);
+      else drawBarrier(p.x, p.y, w, h);
+    }
+  }
+
+  function drawSkate(x, y, side, down, flung) {
+    const dir = side === 0 ? -1 : 1;
+    const lift = down ? 0 : 11;
+    const bob = down ? Math.round(feet[side].bob * 2) : 0;
+    const px = Math.round(x + (down ? 0 : -dir * 2));
+    const py = Math.round(y - lift - bob);
+
+    if (down) {
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = INK;
+      ctx.fillRect(px - 8, Math.round(y + 1), 16, 2);
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.fillStyle = INK;
+    // 轮子
+    for (let i = 0; i < 5; i++) ctx.fillRect(px - 7 + i * 3, py - 2, 2, 2);
+    // 鞋身
+    ctx.fillRect(px - 7, py - 10, 14, 7);
+    // 鞋帮
+    ctx.fillRect(px - 5, py - 13, 10, 4);
+    // 鞋头
+    ctx.fillRect(px + dir * 7 - (dir < 0 ? 2 : 0), py - 8, 2, 4);
+    // 鞋带
+    ctx.fillStyle = PAPER;
+    ctx.fillRect(px - 3, py - 9, 6, 1);
+    // 轮子高光（滚动感）
+    if (!flung) {
+      ctx.fillStyle = PAPER;
+      ctx.fillRect(px - 7 + (Math.floor(dist * 0.7 + side * 2) % 5) * 3, py - 2, 1, 1);
+    }
+  }
+
+  function drawSkates() {
+    if (state === 'falling' || state === 'over') {
+      const t = state === 'over' ? 1 : Math.min(1, fallT / FALL_TIME);
+      const e = t * t * (3 - 2 * t);
+      drawSkate(skateL - e * 26, skateY - e * 30, 0, false, true);
+      drawSkate(skateR + e * 30, skateY - e * 34, 1, false, true);
+      return;
+    }
+    const ready = state === 'ready';
+    drawSkate(skateL, skateY, 0, ready || feet[0].down, false);
+    drawSkate(skateR, skateY, 1, ready || feet[1].down, false);
+  }
+
+  function drawEffects() {
+    // 速度线
+    if (speed > 34) {
+      const a = Math.min(0.16, (speed - 34) / 90);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = INK;
+      for (let i = 0; i < 6; i++) {
+        const yy = horizon + 14 + ((i * 37 + Math.floor(dist * 3)) % (VH - horizon - 20));
+        const xx = (i % 2 === 0) ? 4 : VW - 26;
+        ctx.fillRect(xx, yy, 10 + (i % 3) * 4, 1);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / p.life);
+      ctx.fillStyle = INK;
+      ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
+    }
+    ctx.globalAlpha = 1;
+
+    if (state === 'falling') {
+      const t = Math.min(1, fallT / FALL_TIME);
+      if (t < 0.22) {
+        ctx.globalAlpha = (0.22 - t) / 0.22 * 0.5;
+        ctx.fillStyle = DANGER;
+        ctx.fillRect(0, 0, VW, VH);
+        ctx.globalAlpha = 1;
+      }
+      ctx.globalAlpha = t * 0.35;
+      ctx.fillStyle = INK;
+      ctx.fillRect(0, 0, VW, Math.round(2 + t * 6));
+      ctx.fillRect(0, VH - Math.round(2 + t * 6), VW, Math.round(2 + t * 6));
       ctx.globalAlpha = 1;
     }
   }
 
-  /* ---------------- loop ---------------- */
+  /* ---------------- 渲染 ---------------- */
+  function render() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = PAPER;
+    ctx.fillRect(0, 0, VW, VH);
+
+    drawSkyline();
+
+    ctx.save();
+    if (state === 'falling') {
+      const t = Math.min(1, fallT / FALL_TIME);
+      const e = t * t * (3 - 2 * t);
+      ctx.translate(VW / 2, VH * 0.72);
+      ctx.rotate(e * 0.13);
+      ctx.translate(-VW / 2, -VH * 0.72);
+      ctx.translate(0, e * 12);
+    }
+    drawRoad();
+    drawProps();
+    drawObjects();
+    ctx.restore();
+
+    drawSkates();
+    drawEffects();
+  }
+
+  /* ---------------- 主循环 ---------------- */
+  let lastTime = 0;
+
   function frame(now) {
     const dt = Math.min(0.05, (now - lastTime) / 1000 || 0);
     lastTime = now;
     update(dt);
-    draw();
+    render();
     requestAnimationFrame(frame);
   }
 
