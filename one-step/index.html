@@ -37,8 +37,8 @@
 <div id="hud">0 m</div>
 <div id="overlay">
   <div class="big">一步</div>
-  <div class="sub">交替轻点 · 两只脚不能同时离开屏幕</div>
-  <div class="hint">轻点开始</div>
+  <div class="sub">按住屏幕前进 · 两只脚不能同时离开</div>
+  <div class="hint">按住开始</div>
 </div>
 <script>
 (() => {
@@ -56,9 +56,7 @@
   const R = 13;             // 脚的半径
   const HIT_R = 9;          // 更宽容的碰撞半径
   const BOTH_UP_GRACE = 0.16; // 双脚离屏允许的容错时间（秒）
-  const IMPULSE = 120;      // 每步获得的速度
-  const DECAY = 1.25;       // 每秒速度衰减
-  const MAX_SPEED = 420;
+  const HOLD_SPEED = 250;   // 只要有手指按住，画面就以此速度前进
 
   let W = 0, H = 0, DPR = 1, horizon = 0;
 
@@ -182,9 +180,9 @@
     overlay.classList.remove('hide');
     overlay.innerHTML =
       '<div class="big">一步</div>' +
-      '<div class="sub">交替轻点 · 两只脚不能同时离开屏幕</div>' +
+      '<div class="sub">按住屏幕前进 · 两只脚不能同时离开</div>' +
       (best > 0 ? '<div class="sub">最佳 ' + best + ' m</div>' : '') +
-      '<div class="hint">轻点开始</div>';
+      '<div class="hint">按住开始</div>';
   }
 
   function fail() {
@@ -203,12 +201,11 @@
     overlay.innerHTML =
       '<div class="big">' + m + ' m</div>' +
       '<div class="sub">最佳 ' + best + ' m</div>' +
-      '<div class="hint">轻点重来</div>';
+      '<div class="hint">按住重来</div>';
   }
 
   function doStep(side) {
     if (state !== 'playing') return;
-    speed = Math.min(MAX_SPEED, speed + IMPULSE);
     feet[side].bob = 1;
     ripples.push({ x: feet[side].x, y: horizon - 4, t: 0 });
     sfxStep(side);
@@ -249,8 +246,11 @@
     if (state === 'ready') {
       start(); // 这一下也算第一步
     } else if (state === 'over') {
-      if (performance.now() - overAt > 420) restart();
-      return;
+      if (performance.now() - overAt > 420) {
+        restart(); // 重开后手指仍按着，继续前进
+      } else {
+        return;
+      }
     }
     if (state !== 'playing') return;
 
@@ -286,8 +286,11 @@
     if (state === 'ready') {
       start();
     } else if (state === 'over') {
-      if (performance.now() - overAt > 420) restart();
-      return;
+      if (performance.now() - overAt > 420) {
+        restart();
+      } else {
+        return;
+      }
     }
     if (state !== 'playing') return;
 
@@ -315,8 +318,11 @@
     for (const f of feet) f.down = f.sources.size > 0;
 
     if (state === 'playing') {
-      speed *= Math.exp(-DECAY * dt);
-      if (speed < 4) speed = 0;
+      // 只要还有手指按住屏幕，画面就持续前进
+      const anyDown = feet[0].down || feet[1].down;
+      const target = anyDown ? HOLD_SPEED : 0;
+      speed += (target - speed) * Math.min(1, dt * 14);
+      if (!anyDown && speed < 6) speed = 0;
       dist += speed * dt;
 
       // 双脚离屏判定
