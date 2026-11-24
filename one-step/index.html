@@ -996,7 +996,7 @@
   }
 
   /* ---------------- 玩家：背对镜头的小猪 ---------------- */
-  const PIG = { skin:'#f9b6c2', light:'#ffcdd6', skin2:'#e693a5',
+  const PIG = { skin:'#f7a8b8', light:'#ffc9d4', skin2:'#e58ca0',
     denim:'#5b7fd4', denim2:'#3e5fac', denim3:'#7c9be6', gold:'#ffc94a', orange:'#ff8a5b' };
 
   function pigU() { return Math.max(0.55, Math.min(1.15, VH / 390)); }
@@ -1040,26 +1040,45 @@
     return boxes;
   }
 
-  function drawPigSkate(x, y, u) {
-    const bw = 13 * u, bh = 6 * u;
-    const left = Math.round(x - bw / 2);
-    const top = Math.round(y - 9 * u);
-    // 轮子
+  // 侧后方视角的四轮旱冰鞋：靴筒在脚跟一侧，鞋头朝外
+  function drawPigSkate(x, y, u, side) {
+    ctx.save();
+    ctx.translate(Math.round(x), Math.round(y));
+    ctx.scale(side, 1);
+
+    // 轮子（侧面两颗大轮，浅色轮毂）
+    for (const wx of [-3.9, 3.7]) {
+      ctx.fillStyle = pal.ink;
+      ctx.beginPath();
+      ctx.arc(Math.round(wx * u), Math.round(-2.6 * u), Math.max(2, Math.round(2.6 * u)), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#c6d0d6';
+      ctx.beginPath();
+      ctx.arc(Math.round(wx * u), Math.round(-2.6 * u), Math.max(1, Math.round(1.4 * u)), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 底板
     ctx.fillStyle = pal.ink;
-    ctx.fillRect(Math.round(x - 6 * u), Math.round(y - 3 * u), Math.max(2, Math.round(4 * u)), Math.max(2, Math.round(3 * u)));
-    ctx.fillRect(Math.round(x + 2 * u), Math.round(y - 3 * u), Math.max(2, Math.round(4 * u)), Math.max(2, Math.round(3 * u)));
-    ctx.fillStyle = '#c6d0d6';
-    ctx.fillRect(Math.round(x - 5 * u), Math.round(y - 2 * u), Math.max(1, Math.round(2 * u)), Math.max(1, Math.round(2 * u)));
-    ctx.fillRect(Math.round(x + 3 * u), Math.round(y - 2 * u), Math.max(1, Math.round(2 * u)), Math.max(1, Math.round(2 * u)));
-    // 鞋靴
+    ctx.fillRect(Math.round(-6.6 * u), Math.round(-7.2 * u), Math.max(6, Math.round(13.2 * u)), Math.max(2, Math.round(2.6 * u)));
+    ctx.fillStyle = '#4a5560';
+    ctx.fillRect(Math.round(-5.8 * u), Math.round(-6.7 * u), Math.max(4, Math.round(11.6 * u)), Math.max(1, Math.round(1.4 * u)));
+
+    // 靴身：前掌 + 高帮
     ctx.fillStyle = pal.ink;
-    ctx.fillRect(left - 1, top - 1, Math.round(bw) + 2, Math.round(bh) + 2);
+    ctx.fillRect(Math.round(-5.8 * u) - 1, Math.round(-9.8 * u) - 1, Math.max(6, Math.round(11 * u)) + 2, Math.max(2, Math.round(3 * u)) + 2);
+    ctx.fillRect(Math.round(-5.8 * u) - 1, Math.round(-15 * u) - 1, Math.max(4, Math.round(6.2 * u)) + 2, Math.max(4, Math.round(6.6 * u)) + 2);
     ctx.fillStyle = '#fffdf4';
-    ctx.fillRect(left, top, Math.round(bw), Math.round(bh));
+    ctx.fillRect(Math.round(-5.8 * u), Math.round(-9.8 * u), Math.max(6, Math.round(11 * u)), Math.max(2, Math.round(3 * u)));
+    ctx.fillRect(Math.round(-5.8 * u), Math.round(-15 * u), Math.max(4, Math.round(6.2 * u)), Math.max(4, Math.round(6.6 * u)));
+
+    // 橙色靴口
     ctx.fillStyle = PIG.orange;
-    ctx.fillRect(left, top, Math.round(bw), Math.max(1, Math.round(2 * u)));
-    ctx.fillStyle = '#dfe7ea';
-    ctx.fillRect(left, top + Math.round(bh) - Math.max(1, Math.round(2 * u)), Math.round(bw), Math.max(1, Math.round(u)));
+    ctx.fillRect(Math.round(-5.8 * u), Math.round(-15 * u), Math.max(4, Math.round(6.2 * u)), Math.max(1, Math.round(1.8 * u)));
+    // 鞋头刹车
+    ctx.fillRect(Math.round(4.8 * u), Math.round(-6.6 * u), Math.max(1, Math.round(1.8 * u)), Math.max(1, Math.round(1.6 * u)));
+
+    ctx.restore();
   }
 
   function supportSide() {
@@ -1162,7 +1181,7 @@
     const air = bothUp ? 3 * u : 0;
     const bodyBottom = ground - 25 * u - bob - air;
     const bodyTop = bodyBottom - 33 * u;
-    const headTop = bodyTop - 22 * u;
+    const headTop = bodyTop - 25 * u;
 
     // 地面影子
     ctx.globalAlpha = 0.14;
@@ -1202,7 +1221,7 @@
       ctx.fillStyle = pal.ink;
       ctx.fillRect(Math.round(baseX - 7 * u), Math.round(ground - 1), Math.round(14 * u), Math.max(1, Math.round(2 * u)));
       ctx.globalAlpha = 1;
-      drawPigSkate(footX, footY, u);
+      drawPigSkate(footX, footY, u, i === 0 ? -1 : 1);
     }
 
     // 身体
@@ -1265,26 +1284,22 @@
       ctx.fillRect(pxl, pT, pW, Math.max(1, Math.round(u)));
     }
 
-    // 右口袋上的金色心形补丁
+    // 右口袋上的金色心形补丁（像素心）
     {
-      const hx2 = cx + shift + 13 * u;
-      const hy2 = bodyTop + 23 * u;
-      const hs = Math.max(1, 1.8 * u);
-      ctx.beginPath();
-      ctx.moveTo(hx2, hy2 + hs);
-      ctx.bezierCurveTo(hx2 - hs * 1.5, hy2 - hs * 0.2, hx2 - hs * 0.7, hy2 - hs * 1.4, hx2, hy2 - hs * 0.4);
-      ctx.bezierCurveTo(hx2 + hs * 0.7, hy2 - hs * 1.4, hx2 + hs * 1.5, hy2 - hs * 0.2, hx2, hy2 + hs);
-      ctx.closePath();
+      const hpx = Math.round(cx + shift + 13 * u);
+      const hpy = Math.round(bodyTop + 22.5 * u);
+      const hw = Math.max(1, Math.round(1.5 * u));
+      const hh = Math.max(1, Math.round(1.5 * u));
       ctx.fillStyle = PIG.gold;
-      ctx.fill();
-      ctx.strokeStyle = PIG.denim2;
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      ctx.fillRect(hpx - hw, hpy - hh, hw, hh);
+      ctx.fillRect(hpx, hpy - hh, hw, hh);
+      ctx.fillRect(hpx - hw, hpy, hw * 2, hh);
+      ctx.fillRect(hpx - 1, hpy + hh, Math.max(1, hw - 1), 1);
     }
 
     // 卷尾：右侧髋部，探出短裤边缘
-    const tx = cx + shift + 22.5 * u;
-    const ty = bodyTop + 24.5 * u;
+    const tx = cx + shift + 22 * u;
+    const ty = bodyTop + 25.5 * u;
     ctx.lineCap = 'round';
     ctx.strokeStyle = pal.ink;
     ctx.lineWidth = Math.max(2, 2.2 * u);
@@ -1319,19 +1334,19 @@
       ctx.fill();
     }
 
-    // 垂耳：先画，头块随后盖住耳根
+    // 大圆垂耳：先画，头块随后盖住耳根
     for (const dir of [-1, 1]) {
-      const ex = cx + shift + dir * 12.5 * u;
-      const ey = headTop + 8 * u;
+      const ex = cx + shift + dir * 16 * u;
+      const ey = headTop + 13 * u;
       ctx.beginPath();
-      ctx.ellipse(ex, ey, 4.4 * u, 7.4 * u, dir * 0.55, 0, Math.PI * 2);
+      ctx.ellipse(ex, ey, 5.8 * u, 6.6 * u, dir * 0.25, 0, Math.PI * 2);
       ctx.fillStyle = PIG.skin;
       ctx.fill();
       ctx.strokeStyle = pal.ink;
       ctx.lineWidth = Math.max(1, 1.4 * u);
       ctx.stroke();
       ctx.beginPath();
-      ctx.ellipse(ex, ey, 2.2 * u, 4.4 * u, dir * 0.55, 0, Math.PI * 2);
+      ctx.ellipse(ex, ey, 3 * u, 3.8 * u, dir * 0.25, 0, Math.PI * 2);
       ctx.strokeStyle = PIG.skin2;
       ctx.lineWidth = 1;
       ctx.stroke();
@@ -1339,11 +1354,13 @@
 
     // 头
     const headRows = [
-      { w: 14 * u, h: 3 * u },
-      { w: 22 * u, h: 6 * u },
-      { w: 26 * u, h: 9 * u },
-      { w: 22 * u, h: 5 * u },
-      { w: 14 * u, h: 2 * u }
+      { w: 10 * u, h: 2 * u },
+      { w: 18 * u, h: 4 * u },
+      { w: 24 * u, h: 6 * u },
+      { w: 28 * u, h: 7 * u },
+      { w: 30 * u, h: 5 * u },
+      { w: 26 * u, h: 3 * u },
+      { w: 20 * u, h: 2 * u }
     ];
     pigBlob(cx + shift, headTop, headRows, PIG.skin, PIG.skin2);
     ctx.fillStyle = PIG.light;
