@@ -15,8 +15,8 @@
   body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:var(--ink); }
   canvas { display:block; position:fixed; inset:0; touch-action:none; }
   #hud {
-    position:fixed; top:calc(env(safe-area-inset-top) + 18px); left:0; right:0;
-    text-align:center; font-size:13px; letter-spacing:.18em; opacity:.5;
+    position:fixed; top:calc(env(safe-area-inset-top) + 16px); left:0; right:0;
+    text-align:center; font-size:22px; letter-spacing:.14em; opacity:.75;
     pointer-events:none; font-variant-numeric:tabular-nums;
   }
   #overlay {
@@ -25,7 +25,7 @@
     pointer-events:none; transition:opacity .18s ease;
   }
   #overlay.hide { opacity:0; }
-  .big { font-size:min(18vw, 86px); font-weight:500; letter-spacing:.02em; line-height:1; }
+  .big { font-size:min(18vw, 86px); font-weight:500; letter-spacing:.02em; line-height:1; font-variant-numeric:tabular-nums; }
   .sub { font-size:13px; letter-spacing:.12em; opacity:.55; }
   .hint { margin-top:10px; font-size:12px; letter-spacing:.28em; opacity:.35; animation:breathe 2.4s ease-in-out infinite; }
   @keyframes breathe { 0%,100% { opacity:.18 } 50% { opacity:.55 } }
@@ -34,10 +34,10 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="hud">0 m</div>
+<div id="hud">0</div>
 <div id="overlay">
   <div class="big">一步</div>
-  <div class="sub">按住屏幕前进 · 两只脚不能同时离开</div>
+  <div class="sub">按住前进 · 抬脚越过障碍</div>
   <div class="hint">按住开始</div>
 </div>
 <script>
@@ -53,10 +53,11 @@
   const PAPER = '#ffffff';
   const DANGER = '#FF5A1F';
 
-  const R = 13;             // 脚的半径
-  const HIT_R = 9;          // 更宽容的碰撞半径
+  const R = 13;              // 脚的半径
+  const HIT_R = 9;           // 更宽容的碰撞半径
   const BOTH_UP_GRACE = 0.16; // 双脚离屏允许的容错时间（秒）
-  const HOLD_SPEED = 250;   // 只要有手指按住，画面就以此速度前进
+  const BASE_SPEED = 250;    // 按住时的基础速度
+  const MAX_SPEED = 430;     // 速度上限
 
   let W = 0, H = 0, DPR = 1, horizon = 0;
 
@@ -70,15 +71,18 @@
   let speed = 0;
   let bothUpT = 0;
   let obstacles = [];
+  let coins = [];
   let ripples = [];
-  let nextSpawn = 0;
+  let spawnClock = 0;
+  let spawnInterval = 1.85;
+  let score = 0;
   let hitFlash = 0;
   let overAt = 0;
   let shake = 0;
   let lastTime = 0;
   let best = 0;
 
-  try { best = parseInt(localStorage.getItem('yibu.best') || '0', 10) || 0; } catch (e) {}
+  try { best = parseInt(localStorage.getItem('yibu.best.score') || '0', 10) || 0; } catch (e) {}
 
   /* ---------------- audio ---------------- */
   let ac = null;
@@ -115,7 +119,13 @@
   function sfxStep(side) {
     blip(side === 0 ? 196 : 147, 0.07, 'triangle', 0.5);
   }
-
+  function sfxPass() {
+    blip(440, 0.04, 'sine', 0.18);
+  }
+  function sfxCoin() {
+    blip(660, 0.07, 'triangle', 0.45);
+    blip(990, 0.09, 'triangle', 0.28);
+  }
   function sfxHit() {
     blip(150, 0.32, 'sawtooth', 0.7, 45);
   }
@@ -139,8 +149,9 @@
   window.addEventListener('orientationchange', () => setTimeout(resize, 120));
 
   /* ---------------- game ---------------- */
-  function meters() {
-    return Math.floor(dist / 50);
+  function setScore(n) {
+    score = n;
+    hud.textContent = String(score);
   }
 
   function reset() {
@@ -148,8 +159,10 @@
     speed = 0;
     bothUpT = -1.0; // 开局给一点宽容时间
     obstacles = [];
+    coins = [];
     ripples = [];
-    nextSpawn = 380;
+    spawnClock = 0.5;
+    spawnInterval = 1.85;
     hitFlash = 0;
     shake = 0;
     feet.forEach((f) => {
@@ -157,7 +170,7 @@
       f.bob = 0;
       f.down = false;
     });
-    hud.textContent = '0 m';
+    setScore(0);
   }
 
   function toPlaying() {
@@ -171,17 +184,13 @@
     toPlaying();
   }
 
-  function restart() {
-    toPlaying();
-  }
-
   function showReady() {
     state = 'ready';
     overlay.classList.remove('hide');
     overlay.innerHTML =
       '<div class="big">一步</div>' +
-      '<div class="sub">按住屏幕前进 · 两只脚不能同时离开</div>' +
-      (best > 0 ? '<div class="sub">最佳 ' + best + ' m</div>' : '') +
+      '<div class="sub">按住前进 · 抬脚越过障碍</div>' +
+      (best > 0 ? '<div class="sub">最佳 ' + best + '</div>' : '') +
       '<div class="hint">按住开始</div>';
   }
 
@@ -191,34 +200,72 @@
     overAt = performance.now();
     hitFlash = 1;
     shake = 1;
-    const m = meters();
-    if (m > best) {
-      best = m;
-      try { localStorage.setItem('yibu.best', String(best)); } catch (e) {}
+    const isNewBest = score > best;
+    if (isNewBest) {
+      best = score;
+      try { localStorage.setItem('yibu.best.score', String(best)); } catch (e) {}
     }
     sfxHit();
     overlay.classList.remove('hide');
     overlay.innerHTML =
-      '<div class="big">' + m + ' m</div>' +
-      '<div class="sub">最佳 ' + best + ' m</div>' +
+      '<div class="big">' + score + '</div>' +
+      '<div class="sub">' + (isNewBest ? '新纪录' : '最佳 ' + best) + '</div>' +
       '<div class="hint">按住重来</div>';
   }
 
   function doStep(side) {
     if (state !== 'playing') return;
     feet[side].bob = 1;
-    ripples.push({ x: feet[side].x, y: horizon - 4, t: 0 });
+    ripples.push({ x: feet[side].x, y: horizon - 4, t: 0, strong: false });
     sfxStep(side);
   }
 
-  function spawn() {
+  function randLane() {
+    return Math.random() < 0.5 ? 0 : 1;
+  }
+
+  function addObstacle(lane, x) {
     obstacles.push({
-      lane: Math.random() < 0.5 ? 0 : 1,
-      x: W + 40,
+      lane: lane,
+      x: x,
       w: Math.random() < 0.35 ? 18 : 7,
       h: Math.random() < 0.35 ? 34 : 22,
-      hit: false
+      hit: false,
+      counted: false
     });
+  }
+
+  function addCoin(lane, x) {
+    coins.push({ lane: lane, x: x, done: false, missed: false });
+  }
+
+  // 障碍按“图案”生成，而不是纯随机：更容易学会，也更少冤枉
+  function spawnBeat() {
+    const lead = W + 40;
+    const stepPx = Math.max(BASE_SPEED, speed);
+    const r = Math.random();
+
+    if (score < 5) {
+      if (r < 0.55) addObstacle(randLane(), lead);
+      else addCoin(randLane(), lead);
+      return;
+    }
+
+    if (r < 0.42) {
+      addObstacle(randLane(), lead);
+    } else if (r < 0.66) {
+      const a = randLane();
+      addObstacle(a, lead);
+      addObstacle(1 - a, lead + stepPx * 0.5);
+    } else if (r < 0.86) {
+      const l = randLane();
+      addCoin(l, lead);
+      addCoin(l, lead + stepPx * 0.22);
+    } else {
+      const l = randLane();
+      addObstacle(l, lead);
+      addCoin(1 - l, lead + stepPx * 0.3);
+    }
   }
 
   /* ---------------- input ---------------- */
@@ -247,7 +294,7 @@
       start(); // 这一下也算第一步
     } else if (state === 'over') {
       if (performance.now() - overAt > 420) {
-        restart(); // 重开后手指仍按着，继续前进
+        toPlaying(); // 重开后手指仍按着，继续前进
       } else {
         return;
       }
@@ -287,7 +334,7 @@
       start();
     } else if (state === 'over') {
       if (performance.now() - overAt > 420) {
-        restart();
+        toPlaying();
       } else {
         return;
       }
@@ -318,9 +365,9 @@
     for (const f of feet) f.down = f.sources.size > 0;
 
     if (state === 'playing') {
-      // 只要还有手指按住屏幕，画面就持续前进
+      // 只要还有手指按住屏幕，画面就持续前进；分数越高越快
       const anyDown = feet[0].down || feet[1].down;
-      const target = anyDown ? HOLD_SPEED : 0;
+      const target = anyDown ? Math.min(MAX_SPEED, BASE_SPEED + score * 3) : 0;
       speed += (target - speed) * Math.min(1, dt * 14);
       if (!anyDown && speed < 6) speed = 0;
       dist += speed * dt;
@@ -334,31 +381,58 @@
         bothUpT = 0;
       }
 
-      // 障碍移动与碰撞
+      // 障碍
       for (const o of obstacles) {
         o.x -= speed * dt;
-        if (o.hit) continue;
-
-        // 双脚都离屏时不具备“抬脚躲过”的资格
-        const live = feet[o.lane].down || bothUpT > 0.05;
-        if (!live) continue;
-
-        const fx = feet[o.lane].x;
-        if (o.x < fx + HIT_R && o.x + o.w > fx - HIT_R) {
-          o.hit = true;
-          fail();
+        if (!o.hit) {
+          // 双脚都离屏时，不具备“抬脚躲过”的资格
+          const live = feet[o.lane].down || bothUpT > 0.05;
+          if (live) {
+            const fx = feet[o.lane].x;
+            if (o.x < fx + HIT_R && o.x + o.w > fx - HIT_R) {
+              o.hit = true;
+              fail();
+              break;
+            }
+          }
+        }
+        if (!o.counted && o.x + o.w < feet[o.lane].x - 20) {
+          o.counted = true;
+          setScore(score + 1);
+          sfxPass();
         }
       }
-
       obstacles = obstacles.filter((o) => o.x + o.w > -60);
 
-      if (dist > nextSpawn) {
-        spawn();
-        const gap = Math.max(300, 560 - dist * 0.03);
-        nextSpawn = dist + gap;
+      // 金色地砖：踩中加分，抬脚让过不加分
+      for (const c of coins) {
+        if (state !== 'playing') break;
+        c.x -= speed * dt;
+        if (!c.done) {
+          const fx = feet[c.lane].x;
+          if (Math.abs(c.x - fx) < 13) {
+            c.done = true;
+            if (feet[c.lane].down) {
+              setScore(score + 1);
+              ripples.push({ x: fx, y: horizon - 4, t: 0, strong: true });
+              sfxCoin();
+            } else {
+              c.missed = true;
+            }
+          }
+        }
       }
+      coins = coins.filter((c) => c.x > -40);
 
-      hud.textContent = meters() + ' m';
+      // 生成节奏
+      if (state === 'playing') {
+        spawnClock += dt;
+        if (spawnClock >= spawnInterval) {
+          spawnClock = 0;
+          spawnBeat();
+          spawnInterval = Math.max(0.85, 1.85 - score * 0.02);
+        }
+      }
     }
 
     for (const f of feet) f.bob = Math.max(0, f.bob - dt * 4);
@@ -401,14 +475,26 @@
     }
     ctx.globalAlpha = 1;
 
-    // 落脚步的涟漪
+    // 涟漪
     for (const r of ripples) {
       const p = r.t / 0.5;
-      ctx.globalAlpha = 0.16 * (1 - p);
+      ctx.globalAlpha = (r.strong ? 0.28 : 0.16) * (1 - p);
       ctx.strokeStyle = INK;
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = r.strong ? 2 : 1.5;
       ctx.beginPath();
       ctx.arc(r.x, r.y, 8 + p * 22, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // 金色地砖（踩中得分）
+    for (const c of coins) {
+      if (c.done && !c.missed) continue;
+      ctx.globalAlpha = c.missed ? 0.18 : 0.9;
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(c.x, horizon - 6, 6, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
