@@ -105,18 +105,25 @@
     }
 
     /* ---------- setup ---------- */
-    .field {
+    .settings {
+      width: 100%;
+      max-width: 380px;
+      margin: 34px 0 0;
       display: flex;
       flex-direction: column;
-      align-items: center;
       gap: 14px;
-      margin: 36px 0 38px;
     }
-    .field-label {
-      margin: 0;
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .setting-label {
       font-size: 12px;
-      letter-spacing: 0.18em;
+      letter-spacing: 0.16em;
       color: var(--dim);
+      white-space: nowrap;
     }
     .seg {
       display: inline-flex;
@@ -125,6 +132,46 @@
       border: 1px solid var(--line);
       border-radius: 999px;
       background: rgba(255, 255, 255, 0.025);
+    }
+    .stepper {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.025);
+    }
+    .step-btn {
+      width: 40px;
+      height: 42px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      font: inherit;
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 0.2s ease, opacity 0.2s ease;
+    }
+    .step-btn:hover:not(:disabled) { background: rgba(244, 242, 236, 0.08); }
+    .step-btn:disabled {
+      opacity: 0.25;
+      cursor: default;
+    }
+    .step-val {
+      min-width: 64px;
+      text-align: center;
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      color: var(--dim);
+      font-variant-numeric: tabular-nums;
+    }
+    .step-val b {
+      margin-right: 2px;
+      font-size: 17px;
+      font-weight: 500;
+      color: var(--ink);
     }
     .seg-btn {
       width: 54px;
@@ -143,6 +190,8 @@
       background: rgba(244, 242, 236, 0.1);
       color: var(--ink);
     }
+
+    #boot { margin-top: 38px; }
 
     /* ---------- buttons ---------- */
     .btn {
@@ -388,7 +437,10 @@
 
     @media (max-width: 400px) {
       .btn { min-width: 150px; padding: 14px 26px; }
-      .seg-btn { width: 48px; }
+      .seg-btn { width: 42px; }
+      .step-btn { width: 36px; }
+      .step-val { min-width: 56px; }
+      .setting-label { font-size: 11.5px; letter-spacing: 0.1em; }
       .actions { gap: 10px; }
     }
 
@@ -412,18 +464,28 @@
         <h1>时间感知</h1>
         <p class="lead">看一眼目标时间，轻点屏幕后画面变黑并开始计时，<br />感觉时间到了，再轻点一下。</p>
 
-        <div class="field">
-          <p class="field-label">玩家人数</p>
-          <div class="seg" id="seg" role="group" aria-label="玩家人数">
-            <button type="button" class="seg-btn is-on" data-count="1" aria-pressed="true">1</button>
-            <button type="button" class="seg-btn" data-count="2" aria-pressed="false">2</button>
-            <button type="button" class="seg-btn" data-count="3" aria-pressed="false">3</button>
-            <button type="button" class="seg-btn" data-count="4" aria-pressed="false">4</button>
+        <div class="settings">
+          <div class="setting-row">
+            <span class="setting-label">玩家人数</span>
+            <div class="seg" id="seg" role="group" aria-label="玩家人数">
+              <button type="button" class="seg-btn is-on" data-count="1" aria-pressed="true">1</button>
+              <button type="button" class="seg-btn" data-count="2" aria-pressed="false">2</button>
+              <button type="button" class="seg-btn" data-count="3" aria-pressed="false">3</button>
+              <button type="button" class="seg-btn" data-count="4" aria-pressed="false">4</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">最长时间</span>
+            <div class="stepper">
+              <button type="button" class="step-btn" id="max-dec" aria-label="减少最长时间">−</button>
+              <span class="step-val"><b id="max-val">8</b>秒</span>
+              <button type="button" class="step-btn" id="max-inc" aria-label="增加最长时间">+</button>
+            </div>
           </div>
         </div>
 
         <button type="button" class="btn btn-primary" id="boot">开始</button>
-        <p class="foot">目标时间随机生成，均在 8 秒以内</p>
+        <p class="foot" id="foot-note">目标时间随机生成，不超过 8 秒</p>
       </div>
     </section>
 
@@ -518,8 +580,12 @@
         return Array.prototype.slice.call((root || document).querySelectorAll(sel));
       };
 
+      var MIN_MAX = 3;
+      var MAX_MAX = 30;
+
       var S = {
         players: 1,
+        maxTime: 8,
         round: 1,
         turn: 0,
         target: 0,
@@ -541,10 +607,22 @@
         });
       }
 
-      // 目标时间：2.0 ~ 7.9 秒（小于 8 秒），保留一位小数
+      function setMaxTime(value) {
+        var v = Math.min(MAX_MAX, Math.max(MIN_MAX, Math.round(value)));
+        S.maxTime = v;
+        $('#max-val').textContent = v;
+        $('#max-dec').disabled = v <= MIN_MAX;
+        $('#max-inc').disabled = v >= MAX_MAX;
+        $('#foot-note').textContent = '目标时间随机生成，不超过 ' + v + ' 秒';
+      }
+
+      // 目标时间：随机且不超过最长时间，保留一位小数
       function rollTarget() {
-        var t = Math.round((2 + Math.random() * 5.9) * 10) / 10;
-        if (t === lastTarget) t = Math.min(7.9, Math.round((t + 0.3) * 10) / 10);
+        var max = S.maxTime;
+        var lo = Math.min(2, Math.max(0.8, max * 0.25));
+        var hi = Math.max(lo + 0.5, max - 0.1);
+        var t = Math.round((lo + Math.random() * (hi - lo)) * 10) / 10;
+        if (t === lastTarget) t = Math.min(hi, Math.round((t + 0.3) * 10) / 10);
         lastTarget = t;
         return t;
       }
@@ -650,7 +728,7 @@
         verdictEl.textContent = v.text;
         verdictEl.dataset.level = v.level;
 
-        var scale = Math.max(8, Math.ceil(elapsed) + 1);
+        var scale = Math.max(S.maxTime, Math.ceil(elapsed) + 1);
         var pTarget = (S.target / scale) * 100;
         var pYou = Math.min((elapsed / scale) * 100, 100);
         $('#tick-target').style.left = pTarget + '%';
@@ -772,6 +850,8 @@
       });
 
       $('#boot').addEventListener('click', startGame);
+      $('#max-dec').addEventListener('click', function () { setMaxTime(S.maxTime - 1); });
+      $('#max-inc').addEventListener('click', function () { setMaxTime(S.maxTime + 1); });
       $('#handoff-go').addEventListener('click', reveal);
       $('#next-round').addEventListener('click', nextRound);
       $('#end-game').addEventListener('click', finalize);
@@ -780,6 +860,8 @@
       $('#s-reveal').addEventListener('pointerdown', onRevealTap);
       blackout.addEventListener('pointerdown', onBlackoutTap);
       window.addEventListener('keydown', onKey);
+
+      setMaxTime(S.maxTime);
     })();
   </script>
 </body>
