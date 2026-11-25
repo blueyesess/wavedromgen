@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>磁暴 · Magnet Storm</title>
+<style>
+  :root{
+    --bg:#0B0B10; --panel:#14141C; --line:rgba(255,255,255,.09);
+    --text:#ECECF2; --muted:#8B8B9A; --n:#6F6FFF; --s:#27D2BF;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{
+    margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:"SF Pro Text","PingFang SC",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    overscroll-behavior:none;user-select:none;-webkit-user-select:none;
+  }
+  #app{display:flex;flex-direction:column;height:100dvh;max-width:520px;margin:0 auto;padding:12px 12px 16px;gap:10px}
+  header{display:flex;justify-content:space-between;align-items:flex-end;padding:0 4px}
+  .label{font-size:11px;color:var(--muted);letter-spacing:.12em}
+  #score{font-size:28px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.15}
+  #combo{font-size:20px;font-weight:600;color:var(--n);font-variant-numeric:tabular-nums;transition:transform .12s ease}
+  #combo.bump{transform:scale(1.35)}
+  #stage{flex:1;position:relative;min-height:0;display:flex;align-items:center;justify-content:center}
+  #timebar{height:4px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;flex:none}
+  #timefill{height:100%;width:100%;background:var(--n);border-radius:999px}
+  canvas{border-radius:16px;background:var(--panel);touch-action:none;display:block}
+  #controls{display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:10px}
+  button{
+    appearance:none;border:1px solid var(--line);background:#191922;color:var(--text);
+    border-radius:14px;font-size:22px;padding:16px 0;font-family:inherit;cursor:pointer;
+  }
+  button:active{background:#242430}
+  #overlay{
+    position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(11,11,16,.84);border-radius:16px;text-align:center;padding:24px;
+  }
+  #overlay.show{display:flex}
+  #overlay h2{margin:0 0 8px;font-size:22px}
+  #overlay p{margin:0 0 20px;color:var(--muted);font-size:14px}
+  #overlay button{padding:12px 30px;font-size:16px;border-radius:12px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div>
+      <div class="label">SCORE</div>
+      <div id="score">0</div>
+    </div>
+    <div style="text-align:right">
+      <div class="label">COMBO</div>
+      <div id="combo">×1</div>
+    </div>
+  </header>
+
+  <div id="timebar"><div id="timefill"></div></div>
+
+  <div id="stage">
+    <canvas id="game"></canvas>
+    <div id="overlay">
+      <div>
+        <h2 id="overTitle">时间到</h2>
+        <p id="finalScore"></p>
+        <button id="restart">再来一局</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <button id="left" aria-label="左移">◀</button>
+    <button id="drop" aria-label="落下">▼</button>
+    <button id="right" aria-label="右移">▶</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var COLS = 6, ROWS = 10;
+  var canvas = document.getElementById('game');
+  var ctx = canvas.getContext('2d');
+  var scoreEl = document.getElementById('score');
+  var comboEl = document.getElementById('combo');
+  var overlay = document.getElementById('overlay');
+  var finalScoreEl = document.getElementById('finalScore');
+  var overTitle = document.getElementById('overTitle');
+  var timeFill = document.getElementById('timefill');
+
+  var cell = 48, boardW = 0, boardH = 0, dpr = 1;
+  var grid, cur, score, combo, fallAcc, fallInterval, gameOver, idSeq, shake, timeLeft;
+  var GAME_TIME = 60;
+
+  var COLORS = { N: '#6F6FFF', S: '#27D2BF' };
+  var GOLD = '#EFAA17';
+
+  function rand(n) { return Math.floor(Math.random() * n); }
+  function inBounds(c, r) { return c >= 0 && c < COLS && r >= 0 && r < ROWS; }
+  function at(c, r) { return inBounds(c, r) ? grid[r][c] : null; }
+
+  function allBlocks() {
+    var out = [];
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) if (grid[r][c]) out.push(grid[r][c]);
+    }
+    return out;
+  }
+
+  function makeBlock(c, r, value, pol) {
+    return { id: idSeq++, c: c, r: r, value: value, pol: pol, super: value >= 9, px: c, py: r };
+  }
+
+  function removeBlock(b) {
+    if (grid[b.r][b.c] === b) grid[b.r][b.c] = null;
+  }
+
+  function moveBlock(b, c, r) {
+    if (grid[b.r][b.c] === b) grid[b.r][b.c] = null;
+    b.c = c; b.r = r; grid[r][c] = b;
+  }
+
+  function addScore(v) {
+    score += v;
+    scoreEl.textContent = String(score);
+  }
+
+  /* ---------- 布局 ---------- */
+
+  function resize() {
+    var stage = document.getElementById('stage');
+    var rect = stage.getBoundingClientRect();
+    cell = Math.floor(Math.min((rect.width - 4) / COLS, (rect.height - 4) / ROWS));
+    if (cell < 20) cell = 20;
+    boardW = cell * COLS;
+    boardH = cell * ROWS;
+    dpr = window.devicePixelRatio || 1;
+    canvas.width = boardW * dpr;
+    canvas.height = boardH * dpr;
+    canvas.style.width = boardW + 'px';
+    canvas.style.height = boardH + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  /* ---------- 生成 ---------- */
+
+  function spawn() {
+    if (!grid) return;
+    var order = [Math.floor(COLS / 2), Math.floor(COLS / 2) - 1, Math.floor(COLS / 2) + 1, 0, COLS - 1, 1, COLS - 2];
+    for (var i = 0; i < order.length; i++) {
+      var c = order[i];
+      if (!inBounds(c, 0)) continue;
+      if (!grid[0][c]) {
+        cur = {
+          c: c, r: 0, px: c, py: 0,
+          value: 1 + rand(3),
+          pol: Math.random() < 0.5 ? 'N' : 'S'
+        };
+        return;
+      }
+    }
+    endGame('场地满了');
+  }
+
+  function canDown(b) {
+    return b.r + 1 < ROWS && !grid[b.r + 1][b.c];
+  }
+
+  function moveH(dir) {
+    if (!cur || gameOver) return;
+    var nc = cur.c + dir;
+    if (nc >= 0 && nc < COLS && !grid[cur.r][nc]) cur.c = nc;
+  }
+
+  function hardDrop() {
+    if (!cur || gameOver) return;
+    while (canDown(cur)) cur.r++;
+    lock();
+  }
+
+  function lock() {
+    var b = makeBlock(cur.c, cur.r, cur.value, cur.pol);
+    b.px = cur.px;
+    b.py = cur.py;
+    grid[b.r][b.c] = b;
+    cur = null;
+
+    combo = 0;
+    resolve();
+
+    comboEl.textContent = '×' + Math.max(1, combo + 1);
+    if (combo >= 2) {
+      comboEl.classList.add('bump');
+      setTimeout(function () { comboEl.classList.remove('bump'); }, 140);
+    }
+
+    if (!gameOver) spawn();
+  }
+
+  /* ---------- 结算 ---------- */
+
+  function tryMerge(a, b) {
+    a.value += b.value;
+    if (a.value >= 9) a.super = true;
+    removeBlock(b);
+    combo++;
+    addScore(10 + b.value * 2);
+  }
+
+  function explode(b) {
+    var gain = b.value * 12;
+    var cleared = 0;
+    for (var r = b.r - 2; r <= b.r + 2; r++) {
+      for (var c = b.c - 2; c <= b.c + 2; c++) {
+        if (!inBounds(c, r)) continue;
+        if (grid[r][c]) {
+          grid[r][c] = null;
+          cleared++;
+        }
+      }
+    }
+    combo++;
+    addScore(gain + cleared * 6);
+    shake = 10;
+  }
+
+  function findAction() {
+    var blocks = allBlocks();
+    var dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    var i, j, o;
+
+    // 1. 超块被异极撞到 → 过载爆炸
+    for (i = 0; i < blocks.length; i++) {
+      var b = blocks[i];
+      if (!b.super) continue;
+      for (j = 0; j < dirs.length; j++) {
+        o = at(b.c + dirs[j][0], b.r + dirs[j][1]);
+        if (o && o.pol !== b.pol) {
+          return (function (bb) { return function () { explode(bb); }; })(b);
+        }
+      }
+    }
+
+    // 2. 同极相邻 → 合并（超块已成定局，不再吸收）
+    for (i = 0; i < blocks.length; i++) {
+      var a = blocks[i];
+      if (a.super) continue;
+      for (j = 0; j < 2; j++) {
+        o = at(a.c + (j === 0 ? 1 : 0), a.r + (j === 0 ? 0 : 1));
+        if (o && o.pol === a.pol && !o.super) {
+          return (function (x, y) { return function () { tryMerge(x, y); }; })(a, o);
+        }
+      }
+    }
+
+    // 3. 异极相邻 → 数值小的被弹开，一路滑到撞墙
+    for (i = 0; i < blocks.length; i++) {
+      var p = blocks[i];
+      for (j = 0; j < dirs.length; j++) {
+        o = at(p.c + dirs[j][0], p.r + dirs[j][1]);
+        if (!o || o.pol === p.pol) continue;
+
+        var small = (p.value < o.value) ? p : (o.value < p.value ? o : (p.r < o.r ? p : o));
+        var from = (small === p) ? o : p;
+        var dc = Math.sign(small.c - from.c);
+        var dr = Math.sign(small.r - from.r);
+
+        var tc = small.c, tr = small.r;
+        while (true) {
+          var nc = tc + dc, nr = tr + dr;
+          if (!inBounds(nc, nr) || grid[nr][nc]) break;
+          tc = nc; tr = nr;
+        }
+        if (tc !== small.c || tr !== small.r) {
+          return (function (bb, cc, rr) {
+            return function () {
+              moveBlock(bb, cc, rr);
+              combo++;
+              addScore(4);
+            };
+          })(small, tc, tr);
+        }
+      }
+    }
+
+    return null;
+  }
+
+  function resolve() {
+    var guard = 0;
+    while (guard++ < 120) {
+      var action = findAction();
+      if (!action) break;
+      action();
+    }
+    if (combo > 0) {
+      addScore(combo * combo);
+      if (combo >= 4) shake = Math.max(shake, 6);
+    }
+  }
+
+  /* ---------- 主循环 ---------- */
+
+  var lastTime = 0;
+
+  function update(dt) {
+    if (gameOver) return;
+
+    timeLeft -= dt / 1000;
+    if (timeLeft <= 0) {
+      timeFill.style.width = '0%';
+      endGame('时间到');
+      return;
+    }
+    timeFill.style.width = (timeLeft / GAME_TIME * 100) + '%';
+
+    if (!cur) return;
+
+    cur.px += (cur.c - cur.px) * 0.35;
+    cur.py += (cur.r - cur.py) * 0.5;
+
+    fallAcc += dt;
+    if (fallAcc >= fallInterval) {
+      fallAcc = 0;
+      if (canDown(cur)) {
+        cur.r++;
+      } else {
+        lock();
+      }
+    }
+  }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function drawBlock(b) {
+    var pad = Math.max(2, cell * 0.055);
+    var x = b.px * cell + pad;
+    var y = b.py * cell + pad;
+    var s = cell - pad * 2;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.4)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 2;
+    ctx.fillStyle = b.super ? GOLD : COLORS[b.pol];
+    roundRect(x, y, s, s, s * 0.28);
+    ctx.fill();
+    ctx.restore();
+
+    if (b.super) {
+      ctx.strokeStyle = 'rgba(255,255,255,.9)';
+      ctx.lineWidth = Math.max(1.5, cell * 0.035);
+      roundRect(x + 3, y + 3, s - 6, s - 6, (s - 6) * 0.28);
+      ctx.stroke();
+    }
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(11,11,16,.9)';
+    ctx.font = '600 ' + Math.round(s * 0.42) + 'px "SF Pro Text",system-ui,sans-serif';
+    ctx.fillText(String(b.value), x + s / 2, y + s * 0.55);
+
+    ctx.fillStyle = 'rgba(11,11,16,.5)';
+    ctx.font = '600 ' + Math.round(s * 0.19) + 'px system-ui,sans-serif';
+    ctx.fillText(b.pol, x + s / 2, y + s * 0.2);
+  }
+
+  function draw() {
+    ctx.save();
+    if (shake > 0.5) {
+      ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+      shake *= 0.86;
+    }
+
+    ctx.clearRect(-20, -20, boardW + 40, boardH + 40);
+
+    ctx.fillStyle = 'rgba(255,255,255,.045)';
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        ctx.beginPath();
+        ctx.arc(c * cell + cell / 2, r * cell + cell / 2, 1.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    var blocks = allBlocks();
+    for (var i = 0; i < blocks.length; i++) {
+      blocks[i].px += (blocks[i].c - blocks[i].px) * 0.32;
+      blocks[i].py += (blocks[i].r - blocks[i].py) * 0.32;
+      drawBlock(blocks[i]);
+    }
+
+    if (cur) {
+      // 落点提示
+      var gr = cur.r;
+      while (gr + 1 < ROWS && !grid[gr + 1][cur.c]) gr++;
+      ctx.strokeStyle = 'rgba(255,255,255,.16)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 5]);
+      roundRect(cur.c * cell + cell * 0.06, gr * cell + cell * 0.06, cell * 0.88, cell * 0.88, cell * 0.26);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      drawBlock({ px: cur.px, py: cur.py, value: cur.value, pol: cur.pol, super: cur.value >= 9 });
+    }
+
+    ctx.restore();
+  }
+
+  function frame(now) {
+    var dt = now - lastTime;
+    if (dt > 60) dt = 60;
+    lastTime = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------- 流程 ---------- */
+
+  function endGame(reason) {
+    if (gameOver) return;
+    gameOver = true;
+    cur = null;
+    overTitle.textContent = reason || '时间到';
+    finalScoreEl.textContent = '本局得分 ' + score;
+    overlay.classList.add('show');
+  }
+
+  function reset() {
+    grid = [];
+    for (var r = 0; r < ROWS; r++) {
+      var row = [];
+      for (var c = 0; c < COLS; c++) row.push(null);
+      grid.push(row);
+    }
+    cur = null;
+    score = 0;
+    combo = 0;
+    fallAcc = 0;
+    fallInterval = 620;
+    gameOver = false;
+    idSeq = 1;
+    shake = 0;
+    timeLeft = GAME_TIME;
+
+    scoreEl.textContent = '0';
+    comboEl.textContent = '×1';
+    timeFill.style.width = '100%';
+    overlay.classList.remove('show');
+
+    spawn();
+  }
+
+  /* ---------- 输入 ---------- */
+
+  document.getElementById('left').addEventListener('click', function () { moveH(-1); });
+  document.getElementById('right').addEventListener('click', function () { moveH(1); });
+  document.getElementById('drop').addEventListener('click', hardDrop);
+  document.getElementById('restart').addEventListener('click', reset);
+
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft' || e.key === 'a') { moveH(-1); e.preventDefault(); }
+    else if (e.key === 'ArrowRight' || e.key === 'd') { moveH(1); e.preventDefault(); }
+    else if (e.key === 'ArrowDown' || e.key === 's') { if (cur && !gameOver && canDown(cur)) cur.r++; e.preventDefault(); }
+    else if (e.key === ' ' || e.key === 'ArrowUp') { hardDrop(); e.preventDefault(); }
+  });
+
+  // 触摸左右拖动
+  var touchStartX = null;
+  canvas.addEventListener('touchstart', function (e) {
+    touchStartX = e.touches[0].clientX;
+  }, { passive: true });
+  canvas.addEventListener('touchmove', function (e) {
+    if (touchStartX === null || !cur) return;
+    var dx = e.touches[0].clientX - touchStartX;
+    var steps = Math.round(dx / Math.max(28, cell * 0.8));
+    if (steps !== 0) {
+      moveH(steps > 0 ? 1 : -1);
+      touchStartX = e.touches[0].clientX;
+    }
+  }, { passive: true });
+  canvas.addEventListener('touchend', function () { touchStartX = null; }, { passive: true });
+
+  window.addEventListener('resize', resize);
+
+  /* ---------- 启动 ---------- */
+
+  resize();
+  reset();
+  requestAnimationFrame(function (t) {
+    lastTime = t;
+    requestAnimationFrame(frame);
+  });
+})();
+</script>
+</body>
+</html>
