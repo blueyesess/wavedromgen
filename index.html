@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0b" />
+  <meta name="description" content="时间感知：看一眼目标时间，黑屏后凭感觉在时间刚好到的时候点一下。" />
+  <title>时间感知 · Time Sense</title>
+  <style>
+    :root {
+      --bg: #0a0a0b;
+      --ink: #f4f2ec;
+      --dim: #7e7d77;
+      --dimmer: #54534f;
+      --line: rgba(244, 242, 236, 0.12);
+      --accent: #e6b264;
+      --good: #8fd6a4;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { height: 100%; margin: 0; }
+
+    body {
+      background-color: var(--bg);
+      background-image: radial-gradient(120% 85% at 50% -15%, #17171b 0%, #0a0a0b 62%);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+        "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      overflow: hidden;
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* ---------- screens ---------- */
+    .screen {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      overflow-x: hidden;
+      overflow-y: auto;
+      padding: 44px 26px;
+      padding-bottom: calc(44px + env(safe-area-inset-bottom));
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+      z-index: 1;
+    }
+    .screen.is-active {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    .wrap {
+      width: 100%;
+      max-width: 560px;
+      margin: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    /* ---------- type ---------- */
+    .eyebrow {
+      margin: 0 0 20px;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 7vw, 42px);
+      font-weight: 500;
+      letter-spacing: 0.08em;
+    }
+    h2 {
+      margin: 0;
+      font-size: clamp(24px, 5.5vw, 32px);
+      font-weight: 500;
+      letter-spacing: 0.06em;
+    }
+    .lead {
+      margin: 18px 0 0;
+      font-size: 14.5px;
+      line-height: 1.85;
+      letter-spacing: 0.02em;
+      color: #a5a39c;
+    }
+    .foot {
+      margin: 28px 0 0;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--dimmer);
+    }
+
+    /* ---------- setup ---------- */
+    .field {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      margin: 36px 0 38px;
+    }
+    .field-label {
+      margin: 0;
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      color: var(--dim);
+    }
+    .seg {
+      display: inline-flex;
+      gap: 2px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.025);
+    }
+    .seg-btn {
+      width: 54px;
+      height: 42px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--dim);
+      font: inherit;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+    .seg-btn:hover { color: var(--ink); }
+    .seg-btn.is-on {
+      background: rgba(244, 242, 236, 0.1);
+      color: var(--ink);
+    }
+
+    /* ---------- buttons ---------- */
+    .btn {
+      appearance: none;
+      -webkit-appearance: none;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      font: inherit;
+      font-size: 15px;
+      letter-spacing: 0.06em;
+      padding: 15px 34px;
+      min-width: 180px;
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+        transform 0.12s ease;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary {
+      background: var(--ink);
+      color: #0a0a0b;
+      font-weight: 500;
+    }
+    .btn-primary:hover { background: #ffffff; }
+    .btn-ghost {
+      border-color: var(--line);
+      color: var(--dim);
+    }
+    .btn-ghost:hover {
+      color: var(--ink);
+      border-color: rgba(244, 242, 236, 0.32);
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 38px;
+    }
+
+    /* ---------- reveal ---------- */
+    #s-reveal { cursor: pointer; }
+    .target {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 22px 0 6px;
+    }
+    .target .num {
+      font-size: clamp(84px, 24vw, 140px);
+      font-weight: 300;
+      line-height: 0.92;
+      letter-spacing: -0.055em;
+      font-variant-numeric: tabular-nums;
+      color: #f8f6f0;
+    }
+    .target .unit,
+    .big-result .unit {
+      font-size: 16px;
+      color: var(--dim);
+      letter-spacing: 0.08em;
+    }
+    .target .unit { margin-top: 20px; }
+    .tap-hint {
+      margin: 42px 0 0;
+      font-size: 12px;
+      letter-spacing: 0.2em;
+      color: var(--dim);
+    }
+    #s-reveal .tap-hint { animation: breathe 2.6s ease-in-out infinite; }
+
+    /* ---------- result ---------- */
+    .big-result {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 4px 0 10px;
+    }
+    .big-result .num {
+      font-size: clamp(64px, 18vw, 108px);
+      font-weight: 300;
+      line-height: 1;
+      letter-spacing: -0.05em;
+      font-variant-numeric: tabular-nums;
+    }
+    .big-result .unit { margin-top: 12px; }
+    .verdict {
+      margin: 4px 0 0;
+      font-size: 15px;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      transition: color 0.3s ease;
+    }
+    .verdict[data-level="good"] { color: var(--good); }
+    .verdict[data-level="meh"] { color: var(--dim); }
+    .meta {
+      margin: 6px 0 0;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      color: var(--dim);
+      font-variant-numeric: tabular-nums;
+    }
+    .meta-dim {
+      font-size: 12px;
+      color: var(--dimmer);
+    }
+    .meta[hidden] { display: none; }
+
+    /* ---------- ruler ---------- */
+    .ruler {
+      width: min(420px, 100%);
+      margin: 40px 0 4px;
+    }
+    .track {
+      position: relative;
+      height: 2px;
+      margin: 28px 10px;
+      border-radius: 2px;
+      background: rgba(244, 242, 236, 0.14);
+    }
+    .band {
+      position: absolute;
+      top: 0;
+      height: 2px;
+      border-radius: 2px;
+      background: var(--accent);
+      opacity: 0.6;
+    }
+    .tick {
+      position: absolute;
+      top: 50%;
+      width: 1px;
+      height: 14px;
+      margin-top: -7px;
+      background: var(--dim);
+    }
+    .tick span {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      color: var(--dim);
+      white-space: nowrap;
+    }
+    .tick-target span { bottom: 18px; }
+    .tick-you {
+      height: 18px;
+      margin-top: -9px;
+      background: var(--accent);
+    }
+    .tick-you span {
+      top: 18px;
+      color: var(--accent);
+    }
+
+    /* ---------- boards ---------- */
+    .board {
+      list-style: none;
+      width: min(440px, 100%);
+      margin: 28px 0 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .board li {
+      display: grid;
+      grid-template-columns: 26px 1fr auto;
+      align-items: baseline;
+      gap: 14px;
+      padding: 15px 4px;
+      border-bottom: 1px solid var(--line);
+    }
+    .board li:first-child { border-top: 1px solid var(--line); }
+    .board .rank {
+      font-size: 12px;
+      color: var(--dimmer);
+      font-variant-numeric: tabular-nums;
+    }
+    .board .name {
+      text-align: left;
+      font-size: 15px;
+      letter-spacing: 0.04em;
+    }
+    .board .val {
+      font-size: 14px;
+      color: var(--dim);
+      font-variant-numeric: tabular-nums;
+    }
+    .board li.top .name { color: var(--accent); }
+    .board li.top .val { color: var(--ink); }
+
+    /* ---------- blackout ---------- */
+    #blackout {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: grid;
+      place-items: center;
+      background: #000000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease;
+      touch-action: none;
+      cursor: pointer;
+    }
+    #blackout.is-on {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    #blackout .hint {
+      font-size: 12px;
+      letter-spacing: 0.22em;
+      color: #2c2c2c;
+      opacity: 0;
+    }
+    #blackout.is-on .hint { animation: hintFade 3.6s ease forwards; }
+
+    /* ---------- motion ---------- */
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: none; }
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.85; }
+    }
+    @keyframes hintFade {
+      0% { opacity: 0; }
+      16% { opacity: 1; }
+      60% { opacity: 0.5; }
+      100% { opacity: 0; }
+    }
+    .screen.is-active .wrap > * {
+      animation: rise 0.55s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+    }
+    .screen.is-active .wrap > *:nth-child(2) { animation-delay: 0.04s; }
+    .screen.is-active .wrap > *:nth-child(3) { animation-delay: 0.08s; }
+    .screen.is-active .wrap > *:nth-child(4) { animation-delay: 0.12s; }
+    .screen.is-active .wrap > *:nth-child(5) { animation-delay: 0.16s; }
+    .screen.is-active .wrap > *:nth-child(6) { animation-delay: 0.2s; }
+
+    @media (max-width: 400px) {
+      .btn { min-width: 150px; padding: 14px 26px; }
+      .seg-btn { width: 48px; }
+      .actions { gap: 10px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main id="app">
+    <!-- 设置 -->
+    <section class="screen is-active" id="s-setup" data-screen="setup">
+      <div class="wrap">
+        <p class="eyebrow">Time Sense</p>
+        <h1>时间感知</h1>
+        <p class="lead">看一眼目标时间，轻点屏幕后画面变黑并开始计时，<br />感觉时间到了，再轻点一下。</p>
+
+        <div class="field">
+          <p class="field-label">玩家人数</p>
+          <div class="seg" id="seg" role="group" aria-label="玩家人数">
+            <button type="button" class="seg-btn is-on" data-count="1" aria-pressed="true">1</button>
+            <button type="button" class="seg-btn" data-count="2" aria-pressed="false">2</button>
+            <button type="button" class="seg-btn" data-count="3" aria-pressed="false">3</button>
+            <button type="button" class="seg-btn" data-count="4" aria-pressed="false">4</button>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-primary" id="boot">开始</button>
+        <p class="foot">目标时间随机生成，均在 8 秒以内</p>
+      </div>
+    </section>
+
+    <!-- 换人 -->
+    <section class="screen" id="s-handoff" data-screen="handoff">
+      <div class="wrap">
+        <p class="eyebrow">轮到你了</p>
+        <h2 id="handoff-name">玩家 2</h2>
+        <p class="lead">把设备交给这位玩家，<br />准备好后点击下方按钮。</p>
+        <div class="actions">
+          <button type="button" class="btn btn-primary" id="handoff-go">我准备好了</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 目标时间 -->
+    <section class="screen" id="s-reveal" data-screen="reveal">
+      <div class="wrap">
+        <p class="eyebrow" id="reveal-who">目标时间</p>
+        <div class="target">
+          <span class="num" id="target-num">5.4</span>
+          <span class="unit">秒</span>
+        </div>
+        <p class="lead">记住这个时间。轻点一下开始，<br />画面变黑后不要看时间，凭感觉来。</p>
+        <p class="tap-hint">轻点屏幕开始</p>
+      </div>
+    </section>
+
+    <!-- 结果 -->
+    <section class="screen" id="s-result" data-screen="result">
+      <div class="wrap">
+        <p class="eyebrow" id="result-who">本次结果</p>
+        <div class="big-result">
+          <span class="num" id="elapsed">0.00</span>
+          <span class="unit">秒</span>
+        </div>
+        <p class="verdict" id="verdict">很接近</p>
+
+        <div class="ruler">
+          <div class="track">
+            <div class="band" id="band"></div>
+            <div class="tick tick-target" id="tick-target"><span>目标</span></div>
+            <div class="tick tick-you" id="tick-you"><span>你</span></div>
+          </div>
+        </div>
+
+        <p class="meta" id="result-meta">目标 5.4 秒</p>
+        <p class="meta meta-dim" id="best-line" hidden>最佳偏差 0.00 秒</p>
+        <div class="actions" id="result-actions"></div>
+      </div>
+    </section>
+
+    <!-- 每轮汇总 -->
+    <section class="screen" id="s-round" data-screen="round">
+      <div class="wrap">
+        <p class="eyebrow" id="round-eye">第 1 轮</p>
+        <h2>本轮结果</h2>
+        <p class="meta" id="round-target">目标 5.4 秒</p>
+        <ul class="board" id="round-board"></ul>
+        <div class="actions">
+          <button type="button" class="btn btn-primary" id="next-round">下一轮</button>
+          <button type="button" class="btn btn-ghost" id="end-game">结束</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 最终结果 -->
+    <section class="screen" id="s-final" data-screen="final">
+      <div class="wrap">
+        <p class="eyebrow">最终结果</p>
+        <h2 id="champion">玩家 1 最准</h2>
+        <p class="meta" id="final-sub">共 1 轮</p>
+        <ul class="board" id="final-board"></ul>
+        <div class="actions">
+          <button type="button" class="btn btn-primary" id="again">再玩一次</button>
+          <button type="button" class="btn btn-ghost" id="to-setup">返回设置</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="blackout" role="button" aria-label="时间到了就轻点屏幕">
+    <span class="hint">时间到了就轻点</span>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var $ = function (sel, root) { return (root || document).querySelector(sel); };
+      var $$ = function (sel, root) {
+        return Array.prototype.slice.call((root || document).querySelectorAll(sel));
+      };
+
+      var S = {
+        players: 1,
+        round: 1,
+        turn: 0,
+        target: 0,
+        t0: 0,
+        lockUntil: 0,
+        revealAt: 0,
+        roundDevs: [],
+        rounds: [],
+        best: null
+      };
+
+      var lastTarget = 0;
+      var screens = $$('.screen');
+      var blackout = $('#blackout');
+
+      function show(name) {
+        screens.forEach(function (el) {
+          el.classList.toggle('is-active', el.dataset.screen === name);
+        });
+      }
+
+      // 目标时间：2.0 ~ 7.9 秒（小于 8 秒），保留一位小数
+      function rollTarget() {
+        var t = Math.round((2 + Math.random() * 5.9) * 10) / 10;
+        if (t === lastTarget) t = Math.min(7.9, Math.round((t + 0.3) * 10) / 10);
+        lastTarget = t;
+        return t;
+      }
+
+      function startGame() {
+        S.round = 1;
+        S.turn = 0;
+        S.roundDevs = [];
+        S.rounds = [];
+        S.best = null;
+        S.target = rollTarget();
+        reveal();
+      }
+
+      function reveal() {
+        S.revealAt = performance.now();
+        $('#target-num').textContent = S.target.toFixed(1);
+        $('#reveal-who').textContent =
+          S.players > 1 ? '玩家 ' + (S.turn + 1) + ' · 目标时间' : '目标时间';
+        show('reveal');
+      }
+
+      function handoff() {
+        S.turn += 1;
+        $('#handoff-name').textContent = '玩家 ' + (S.turn + 1);
+        show('handoff');
+      }
+
+      function nextRound() {
+        S.round += 1;
+        S.turn = -1;
+        S.roundDevs = [];
+        S.target = rollTarget();
+        handoff();
+      }
+
+      function nextSolo() {
+        S.round += 1;
+        S.target = rollTarget();
+        reveal();
+      }
+
+      function beginTiming() {
+        var now = performance.now();
+        if (now - S.revealAt < 320) return;
+        S.t0 = now;
+        S.lockUntil = now + 220;
+        blackout.classList.add('is-on');
+      }
+
+      function endTiming() {
+        if (!blackout.classList.contains('is-on')) return;
+        var now = performance.now();
+        if (now < S.lockUntil) return;
+        blackout.classList.remove('is-on');
+        resolveTurn((now - S.t0) / 1000);
+      }
+
+      function resolveTurn(elapsed) {
+        var dev = elapsed - S.target;
+        S.roundDevs[S.turn] = dev;
+        renderResult(elapsed, dev);
+        show('result');
+      }
+
+      function verdictOf(abs) {
+        if (abs < 0.1) return { text: '时间感近乎完美', level: 'good' };
+        if (abs < 0.25) return { text: '非常准', level: 'good' };
+        if (abs < 0.5) return { text: '很接近', level: 'mid' };
+        if (abs < 1) return { text: '稍有偏差', level: 'mid' };
+        if (abs < 2) return { text: '差得有点多', level: 'meh' };
+        return { text: '时间感飘走了', level: 'meh' };
+      }
+
+      function devText(dev) {
+        var abs = Math.abs(dev);
+        if (abs < 0.05) return '分毫不差';
+        return (dev > 0 ? '慢' : '快') + ' ' + abs.toFixed(2) + ' 秒';
+      }
+
+      function makeBtn(label, cls, onClick) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn ' + cls;
+        b.textContent = label;
+        b.addEventListener('click', onClick);
+        return b;
+      }
+
+      function renderResult(elapsed, dev) {
+        var abs = Math.abs(dev);
+        var multi = S.players > 1;
+
+        $('#result-who').textContent = multi
+          ? '玩家 ' + (S.turn + 1) + ' · 第 ' + S.round + ' 轮'
+          : '本次结果';
+        $('#elapsed').textContent = elapsed.toFixed(2);
+        $('#result-meta').textContent =
+          '目标 ' + S.target.toFixed(1) + ' 秒 · ' + devText(dev);
+
+        var v = verdictOf(abs);
+        var verdictEl = $('#verdict');
+        verdictEl.textContent = v.text;
+        verdictEl.dataset.level = v.level;
+
+        var scale = Math.max(8, Math.ceil(elapsed) + 1);
+        var pTarget = (S.target / scale) * 100;
+        var pYou = Math.min((elapsed / scale) * 100, 100);
+        $('#tick-target').style.left = pTarget + '%';
+        $('#tick-you').style.left = pYou + '%';
+        $('#band').style.left = Math.min(pTarget, pYou) + '%';
+        $('#band').style.width = Math.abs(pYou - pTarget) + '%';
+
+        var bestLine = $('#best-line');
+        if (multi) {
+          bestLine.hidden = true;
+        } else {
+          S.best = S.best === null ? abs : Math.min(S.best, abs);
+          bestLine.textContent = '最佳偏差 ' + S.best.toFixed(2) + ' 秒';
+          bestLine.hidden = false;
+        }
+
+        var actions = $('#result-actions');
+        actions.innerHTML = '';
+        if (!multi) {
+          actions.appendChild(makeBtn('再来一次', 'btn-primary', nextSolo));
+          actions.appendChild(makeBtn('结束', 'btn-ghost', function () { show('setup'); }));
+        } else if (S.turn + 1 < S.players) {
+          actions.appendChild(makeBtn('交给 玩家 ' + (S.turn + 2), 'btn-primary', handoff));
+        } else {
+          actions.appendChild(makeBtn('查看本轮结果', 'btn-primary', endRound));
+        }
+      }
+
+      function endRound() {
+        S.rounds.push({ target: S.target, devs: S.roundDevs.slice() });
+
+        var order = [];
+        for (var i = 0; i < S.players; i++) {
+          order.push({ i: i, dev: S.roundDevs[i] });
+        }
+        order.sort(function (a, b) { return Math.abs(a.dev) - Math.abs(b.dev); });
+
+        var ul = $('#round-board');
+        ul.innerHTML = '';
+        order.forEach(function (row, idx) {
+          var li = document.createElement('li');
+          if (idx === 0) li.className = 'top';
+          li.innerHTML =
+            '<span class="rank">' + (idx + 1) + '</span>' +
+            '<span class="name">玩家 ' + (row.i + 1) + '</span>' +
+            '<span class="val">' + devText(row.dev) + '</span>';
+          ul.appendChild(li);
+        });
+
+        $('#round-eye').textContent = '第 ' + S.round + ' 轮';
+        $('#round-target').textContent = '目标 ' + S.target.toFixed(1) + ' 秒 · 本轮全部完成';
+        show('round');
+      }
+
+      function finalize() {
+        var stats = [];
+        for (var i = 0; i < S.players; i++) {
+          var sum = 0;
+          for (var r = 0; r < S.rounds.length; r++) {
+            sum += Math.abs(S.rounds[r].devs[i]);
+          }
+          stats.push({ i: i, avg: sum / S.rounds.length });
+        }
+        stats.sort(function (a, b) { return a.avg - b.avg; });
+
+        var best = stats[0];
+        $('#champion').textContent = '玩家 ' + (best.i + 1) + ' 最准';
+        $('#final-sub').textContent =
+          '共 ' + S.rounds.length + ' 轮 · 平均偏差 ' + best.avg.toFixed(2) + ' 秒';
+
+        var ul = $('#final-board');
+        ul.innerHTML = '';
+        stats.forEach(function (st, idx) {
+          var li = document.createElement('li');
+          if (idx === 0) li.className = 'top';
+          li.innerHTML =
+            '<span class="rank">' + (idx + 1) + '</span>' +
+            '<span class="name">玩家 ' + (st.i + 1) + '</span>' +
+            '<span class="val">平均 ' + st.avg.toFixed(2) + ' 秒</span>';
+          ul.appendChild(li);
+        });
+
+        show('final');
+      }
+
+      function onRevealTap(e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        e.preventDefault();
+        beginTiming();
+      }
+
+      function onBlackoutTap(e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        e.preventDefault();
+        endTiming();
+      }
+
+      function onKey(e) {
+        if (e.code !== 'Space' && e.code !== 'Enter') return;
+        if (e.repeat) return;
+        if (blackout.classList.contains('is-on')) {
+          e.preventDefault();
+          endTiming();
+        } else if ($('#s-reveal').classList.contains('is-active')) {
+          e.preventDefault();
+          beginTiming();
+        }
+      }
+
+      $('#seg').addEventListener('click', function (e) {
+        var btn = e.target.closest('.seg-btn');
+        if (!btn) return;
+        $$('.seg-btn').forEach(function (b) {
+          var on = b === btn;
+          b.classList.toggle('is-on', on);
+          b.setAttribute('aria-pressed', String(on));
+        });
+        S.players = Number(btn.dataset.count);
+      });
+
+      $('#boot').addEventListener('click', startGame);
+      $('#handoff-go').addEventListener('click', reveal);
+      $('#next-round').addEventListener('click', nextRound);
+      $('#end-game').addEventListener('click', finalize);
+      $('#again').addEventListener('click', startGame);
+      $('#to-setup').addEventListener('click', function () { show('setup'); });
+      $('#s-reveal').addEventListener('pointerdown', onRevealTap);
+      blackout.addEventListener('pointerdown', onBlackoutTap);
+      window.addEventListener('keydown', onKey);
+    })();
+  </script>
+</body>
+</html>
