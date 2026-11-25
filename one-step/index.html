@@ -996,7 +996,7 @@
   }
 
   /* ---------------- 玩家：背对镜头的小猪 ---------------- */
-  const PIG = { skin:'#f7a8b8', light:'#ffc9d4', skin2:'#e58ca0', maroon:'#6b3a45',
+  const PIG = { skin:'#ffa6c1', light:'#ffd3df', skin2:'#ee8aa9', maroon:'#6b3a45',
     denim:'#5b7fd4', denim2:'#3e5fac', denim3:'#7c9be6', gold:'#ffc94a', orange:'#ff8a5b',
     helm:'#8294b0', helm2:'#a7b8ce', helm3:'#5f7189', cyan:'#8fe6f8', collar:'#2b3245' };
 
@@ -1145,8 +1145,8 @@
     const now = performance.now();
     const pulse = 0.75 + 0.25 * Math.sin(now * 0.018);
     const s = Math.max(1, Math.round(su || 1));
-    const w = 3 * s;
-    const barH = 7 * s;
+    const w = 2 * s;
+    const barH = 8 * s;
     const gap = 3 * s;
     const dotH = 3 * s;
     const cx = Math.round(x);
@@ -1189,7 +1189,7 @@
 
     const air = bothUp ? 3 * u : 0;
     const bodyBottom = ground - 22 * u - bob - air;
-    const bodyTop = bodyBottom - 60 * u;
+    const bodyTop = bodyBottom - 62 * u;
     const headTop = bodyTop - 18 * u;
 
     // 地面影子
@@ -1207,11 +1207,11 @@
     for (let i = 0; i < 2; i++) {
       const dir = i === 0 ? -1 : 1;
       const down = i === 0 ? down0 : down1;
-      const baseX = cx + dir * 26 * u;
+      const baseX = cx + dir * 23 * u;
       const footX = baseX + (ss === i ? wob : 0) - (down ? 0 : dir * 2 * u);
       const lift = down ? 0 : (bothUp ? 10 * u : 14 * u);
       const footY = ground - lift;
-      const hipX = cx + dir * 17 * u + shift;
+      const hipX = cx + dir * 19 * u + shift;
       const hipY = bodyBottom + 2 * u;
 
       if (down) {
@@ -1235,23 +1235,33 @@
 
     // 身体：参考图的大圆屁股
     const bodyRows = [
-      { w: 18 * u, h: 3 * u },
-      { w: 30 * u, h: 4 * u },
-      { w: 40 * u, h: 5 * u },
-      { w: 50 * u, h: 7 * u },
-      { w: 58 * u, h: 8 * u },
-      { w: 62 * u, h: 9 * u },
-      { w: 62 * u, h: 9 * u },
-      { w: 58 * u, h: 7 * u },
-      { w: 48 * u, h: 5 * u },
-      { w: 36 * u, h: 3 * u }
+      { w: 14 * u, h: 2 * u },
+      { w: 22 * u, h: 3 * u },
+      { w: 30 * u, h: 3 * u },
+      { w: 38 * u, h: 4 * u },
+      { w: 46 * u, h: 5 * u },
+      { w: 54 * u, h: 5 * u },
+      { w: 60 * u, h: 6 * u },
+      { w: 62 * u, h: 7 * u },
+      { w: 62 * u, h: 7 * u },
+      { w: 60 * u, h: 6 * u },
+      { w: 54 * u, h: 5 * u },
+      { w: 46 * u, h: 4 * u },
+      { w: 36 * u, h: 3 * u },
+      { w: 26 * u, h: 2 * u }
     ];
     pigBlob(cx + shift, bodyTop, bodyRows, PIG.skin, PIG.skin2);
 
     // 左上高光
     ctx.fillStyle = PIG.light;
-    ctx.fillRect(Math.round(cx + shift - 20 * u), Math.round(bodyTop + 9 * u), Math.max(1, Math.round(7 * u)), Math.max(1, Math.round(16 * u)));
-    ctx.fillRect(Math.round(cx + shift - 15 * u), Math.round(bodyTop + 6 * u), Math.max(1, Math.round(5 * u)), Math.max(1, Math.round(5 * u)));
+    {
+      const hx0 = Math.round(cx + shift - 19 * u);
+      const hy0 = Math.round(bodyTop + 8 * u);
+      ctx.fillRect(hx0 + 2 * u, hy0, 4 * u, 2 * u);
+      ctx.fillRect(hx0, hy0 + 2 * u, 8 * u, 10 * u);
+      ctx.fillRect(hx0 + 2 * u, hy0 + 12 * u, 4 * u, 2 * u);
+      ctx.fillRect(hx0 + 3 * u, hy0 + 14 * u, 2 * u, Math.max(1, Math.round(2 * u)));
+    }
 
     // 卷尾：屁股中央的同心螺旋
     const tx = cx + shift;
@@ -1277,97 +1287,19 @@
     ctx.arc(tx, ty, 0.8 * u, 0, Math.PI * 2);
     ctx.fill();
 
-    // 短款背带裤：只盖住屁股下缘
-    const shortRows = [
-      { w: 60 * u, h: 5 * u },
-      { w: 56 * u, h: 3 * u },
-      { w: 48 * u, h: 2 * u }
-    ];
-    pigBlob(cx + shift, bodyTop + 50 * u, shortRows, PIG.denim, PIG.denim2);
-
-    // 深色裤腰
-    ctx.fillStyle = PIG.denim2;
-    ctx.fillRect(Math.round(cx + shift - 29 * u), Math.round(bodyTop + 50 * u), Math.round(58 * u), Math.max(1, Math.round(2 * u)));
-
-    // 背带 + 金扣
-    const strapW = Math.max(2, Math.round(3 * u));
-    for (const dir of [-1, 1]) {
-      const sxp = Math.round(cx + shift + dir * 12 * u - strapW / 2);
-      const syTop = Math.round(bodyTop + 3 * u);
-      const sH = Math.round(bodyTop + 52 * u) - syTop;
-      ctx.fillStyle = pal.ink;
-      ctx.fillRect(sxp - 1, syTop - 1, strapW + 2, sH + 2);
-      ctx.fillStyle = PIG.denim;
-      ctx.fillRect(sxp, syTop, strapW, sH);
-
-      const bxp = Math.round(cx + shift + dir * 12 * u);
-      const byp = Math.round(bodyTop + 50 * u);
-      const br = Math.max(1, Math.round(2 * u));
-      ctx.fillStyle = pal.ink;
-      ctx.fillRect(bxp - br, byp - br, br * 2, br * 2);
-      ctx.fillStyle = PIG.gold;
-      ctx.fillRect(bxp - br + 1, byp - br + 1, br * 2 - 2, br * 2 - 2);
-    }
-
-    // 屁股口袋
-    const pW = Math.max(3, Math.round(7 * u));
-    const pH = Math.max(3, Math.round(4 * u));
-    const pT = Math.round(bodyTop + 52 * u);
-    for (const dir of [-1, 1]) {
-      const pxl = Math.round(cx + shift + dir * 18 * u - pW / 2);
-      ctx.fillStyle = pal.ink;
-      ctx.fillRect(pxl - 1, pT - 1, pW + 2, pH + 2);
-      ctx.fillStyle = PIG.denim3;
-      ctx.fillRect(pxl, pT, pW, pH);
-      ctx.fillStyle = PIG.denim2;
-      ctx.fillRect(pxl, pT, pW, Math.max(1, Math.round(u)));
-    }
-
-    // 右口袋上的金色心形补丁（像素心）
-    {
-      const hpx = Math.round(cx + shift + 18 * u);
-      const hpy = Math.round(bodyTop + 54 * u);
-      ctx.fillStyle = PIG.gold;
-      ctx.fillRect(hpx - 2, hpy - 1, 2, 1);
-      ctx.fillRect(hpx, hpy - 1, 2, 1);
-      ctx.fillRect(hpx - 2, hpy, 4, 1);
-      ctx.fillRect(hpx - 1, hpy + 1, 2, 1);
-    }
-
-    // 手臂
-    for (let i = 0; i < 2; i++) {
-      const dir = i === 0 ? -1 : 1;
-      const down = i === 0 ? down0 : down1;
-      const sx = cx + shift + dir * 29 * u;
-      const sy = bodyTop + 18 * u;
-      let hx = sx + dir * 2 * u;
-      let hy = sy + 10 * u;
-      if (!down || bothUp) { hx = sx + dir * 7 * u; hy = sy - 2 * u; }
-      if (playing && balance > 0.55) { hx = sx + dir * 9 * u; hy = sy - 4 * u; }
-      pigLimb(sx, sy, hx, hy, Math.max(3, Math.round(7 * u)));
-      ctx.beginPath();
-      ctx.arc(hx, hy, Math.max(2, 3.8 * u), 0, Math.PI * 2);
-      ctx.fillStyle = pal.ink;
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(hx, hy, Math.max(1, 2.5 * u), 0, Math.PI * 2);
-      ctx.fillStyle = PIG.skin;
-      ctx.fill();
-    }
-
     // 大圆垂耳：先画，头盔随后盖住耳根
     for (const dir of [-1, 1]) {
       const ex = cx + shift + dir * 21 * u;
-      const ey = headTop + 20 * u;
+      const ey = headTop + 12 * u;
       ctx.beginPath();
-      ctx.ellipse(ex, ey, 7 * u, 9 * u, dir * 0.5, 0, Math.PI * 2);
+      ctx.ellipse(ex, ey, 8 * u, 9.5 * u, dir * 0.6, 0, Math.PI * 2);
       ctx.fillStyle = PIG.skin;
       ctx.fill();
       ctx.strokeStyle = pal.ink;
       ctx.lineWidth = Math.max(1, 1.4 * u);
       ctx.stroke();
       ctx.beginPath();
-      ctx.ellipse(ex, ey, 3.6 * u, 5.2 * u, dir * 0.5, 0, Math.PI * 2);
+      ctx.ellipse(ex, ey, 4 * u, 5.4 * u, dir * 0.6, 0, Math.PI * 2);
       ctx.strokeStyle = PIG.skin2;
       ctx.lineWidth = 1;
       ctx.stroke();
@@ -1403,25 +1335,25 @@
       const neckY = Math.round(headTop + 22 * u);
       const neckW = Math.max(8, Math.round(30 * u));
       ctx.fillStyle = pal.ink;
-      ctx.fillRect(Math.round(cx + shift - neckW / 2) - 1, neckY - 1, neckW + 2, Math.max(2, Math.round(2.4 * u)) + 2);
+      ctx.fillRect(Math.round(cx + shift - neckW / 2) - 1, neckY - 1, neckW + 2, Math.max(2, Math.round(1.6 * u)) + 2);
       ctx.fillStyle = PIG.collar;
-      ctx.fillRect(Math.round(cx + shift - neckW / 2), neckY, neckW, Math.max(1, Math.round(1.6 * u)));
+      ctx.fillRect(Math.round(cx + shift - neckW / 2), neckY, neckW, Math.max(1, Math.round(1.2 * u)));
 
       const dx = Math.round(cx + shift + 16 * u);
-      const dy = neckY + Math.max(1, Math.round(1.6 * u));
+      const dy = neckY + Math.max(1, Math.round(1.2 * u));
       const dW = Math.max(2, Math.round(3 * u));
       const dH = Math.max(4, Math.round(9 * u));
       ctx.fillStyle = pal.ink;
       ctx.fillRect(dx - 1, dy - 1, dW + 2, dH + 2);
       ctx.fillStyle = PIG.collar;
       ctx.fillRect(dx, dy, dW, dH);
-      ctx.fillStyle = PIG.gold;
+      ctx.fillStyle = PIG.helm2;
       ctx.fillRect(dx, dy + dH - 3, dW, 2);
     }
 
     // 失衡提示：支撑脚光环 + 头顶叹号
     if (playing && ss >= 0 && balance > 0.03) {
-      drawBalanceRing(cx + (ss === 0 ? -26 : 26) * u, ground);
+      drawBalanceRing(cx + (ss === 0 ? -23 : 23) * u, ground);
       drawWarnBang(cx + shift, headTop - 17 * u, u);
     }
   }
