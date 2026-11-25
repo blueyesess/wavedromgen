@@ -1289,11 +1289,61 @@
 
     // 卷尾：屁股中央的像素同心螺旋
     const tx = cx + shift;
-    const ty = bodyTop + 31 * u;
+    const ty = bodyTop + 25.5 * u;
     pixelDisc(tx, ty, 7 * u, pal.ink);
     pixelDisc(tx, ty, 5.2 * u, PIG.skin);
     pixelDisc(tx, ty, 3.2 * u, pal.ink);
     pixelDisc(tx, ty, 1.5 * u, PIG.light);
+
+    // 牛仔短背带裤：贴着大圆屁股的下半部分
+    const shortsTop = bodyTop + 42 * u;
+    const shortRows = [
+      { w: 60 * u, h: 6 * u },
+      { w: 54 * u, h: 5 * u }, { w: 46 * u, h: 4 * u },
+      { w: 36 * u, h: 3 * u }, { w: 26 * u, h: 2 * u }
+    ];
+    pigBlob(cx + shift, shortsTop, shortRows, PIG.denim, PIG.denim2, 1);
+    // 裤腰
+    pigBlob(cx + shift, bodyTop + 38.5 * u, [{ w: 62 * u, h: 3 * u }], PIG.denim2, null, 1);
+
+    // 背带
+    for (const dir of [-1, 1]) {
+      const sw = Math.max(3, Math.round(5 * u));
+      const sx = Math.round(cx + shift + dir * 10 * u - sw / 2);
+      const sy0 = Math.round(bodyTop + 4 * u);
+      const sy1 = Math.round(bodyTop + 39 * u);
+      ctx.fillStyle = pal.ink;
+      ctx.fillRect(sx - 1, sy0 - 1, sw + 2, sy1 - sy0 + 2);
+      ctx.fillStyle = PIG.denim;
+      ctx.fillRect(sx, sy0, sw, sy1 - sy0);
+      ctx.fillStyle = PIG.denim3;
+      ctx.fillRect(sx + 1, sy0, 1, sy1 - sy0);
+    }
+
+    // 背带扣
+    for (const dir of [-1, 1]) {
+      const bw = Math.max(2, Math.round(3 * u));
+      const bx0 = Math.round(cx + shift + dir * 10 * u - bw / 2);
+      const by0 = Math.round(bodyTop + 37 * u);
+      ctx.fillStyle = pal.ink;
+      ctx.fillRect(bx0 - 1, by0 - 1, bw + 2, bw + 2);
+      ctx.fillStyle = PIG.gold;
+      ctx.fillRect(bx0, by0, bw, bw);
+    }
+
+    // 屁股口袋
+    for (const dir of [-1, 1]) {
+      const pw = Math.max(5, Math.round(9 * u));
+      const ph = Math.max(4, Math.round(6 * u));
+      const px0 = Math.round(cx + shift + dir * 17 * u - pw / 2);
+      const py0 = Math.round(bodyTop + 48 * u);
+      ctx.fillStyle = pal.ink;
+      ctx.fillRect(px0 - 1, py0 - 1, pw + 2, ph + 2);
+      ctx.fillStyle = PIG.denim2;
+      ctx.fillRect(px0, py0, pw, ph);
+      ctx.fillStyle = PIG.denim3;
+      ctx.fillRect(px0, py0, pw, 1);
+    }
 
     // 大圆垂耳：先画，头盔随后盖住耳根
     for (const dir of [-1, 1]) {
