@@ -47,18 +47,72 @@
     animation:breathe 2s ease-in-out infinite;
   }
   @keyframes breathe { 0%,100% { opacity:.35 } 50% { opacity:.9 } }
-  @media (prefers-reduced-motion: reduce) { .hint { animation:none; } .panel { animation:none; } }
+  #btns {
+    position:fixed; top:calc(env(safe-area-inset-top) + 8px); right:8px;
+    display:flex; gap:6px;
+  }
+  #btns button {
+    width:38px; height:38px; padding:0; cursor:pointer;
+    border:3px solid var(--ink); border-radius:10px; background:#fff;
+    color:var(--ink); font:800 13px/1 ui-monospace, Menlo, monospace;
+    box-shadow:0 3px 0 rgba(24,38,50,.3);
+  }
+  #btns button:active { transform:translateY(2px); box-shadow:none; }
+  #btns button.muted { opacity:.42; }
+  #mult {
+    position:fixed; top:calc(env(safe-area-inset-top) + 62px); left:50%;
+    transform:translateX(-50%); display:flex; gap:5px; pointer-events:none;
+    opacity:0; transition:opacity .18s ease;
+  }
+  #mult.on { opacity:1; }
+  #mult i {
+    width:15px; height:6px; border:2px solid var(--ink); border-radius:2px;
+    background:rgba(255,255,255,.35);
+  }
+  #mult i.f { background:var(--danger); }
+  #tip {
+    position:fixed; left:50%; bottom:24%; transform:translateX(-50%);
+    max-width:76vw; padding:7px 14px; border:3px solid var(--ink); border-radius:12px;
+    background:#fff; color:var(--ink); font-size:11px; letter-spacing:.08em;
+    line-height:1.6; text-align:center; pointer-events:none;
+    opacity:0; transition:opacity .25s ease;
+  }
+  #tip.on { opacity:1; }
+  #flash {
+    position:fixed; left:50%; top:34%; transform:translateX(-50%);
+    font-weight:800; font-size:19px; letter-spacing:.08em; white-space:nowrap;
+    color:#fff; -webkit-text-stroke:4px var(--ink); paint-order:stroke fill;
+    pointer-events:none; opacity:0;
+  }
+  #flash.pop { animation:flashPop .62s ease-out both; }
+  @keyframes flashPop {
+    0% { opacity:0; transform:translate(-50%,8px) scale(.85); }
+    22% { opacity:1; transform:translate(-50%,0) scale(1.04); }
+    70% { opacity:1; transform:translate(-50%,-4px) scale(1); }
+    100% { opacity:0; transform:translate(-50%,-12px) scale(1); }
+  }
+  .cause { color:var(--danger); letter-spacing:.06em; }
+  @media (prefers-reduced-motion: reduce) {
+    .hint { animation:none; } .panel { animation:none; } #flash.pop { animation:none; opacity:1; }
+  }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="hud">0</div>
+<div id="mult"><i></i><i></i><i></i><i></i></div>
+<div id="tip"></div>
+<div id="flash"></div>
 <div id="overlay">
   <div class="panel">
     <div class="big">一步</div>
-    <div class="sub">按住向前滑 · 抬脚越过障碍</div>
-    <div class="hint">按住开始</div>
+    <div class="sub">点左右半屏抬脚 · 抬对脚越过障碍</div>
+    <div class="hint">点屏幕开始</div>
   </div>
+</div>
+<div id="btns">
+  <button id="btnPause" type="button" aria-label="暂停">II</button>
+  <button id="btnMute" type="button" aria-label="声音">音</button>
 </div>
 <script>
 (() => {
@@ -68,6 +122,11 @@
   const ctx = canvas.getContext('2d', { alpha: false });
   const hud = document.getElementById('hud');
   const overlay = document.getElementById('overlay');
+  const multEl = document.getElementById('mult');
+  const tipEl = document.getElementById('tip');
+  const flashEl = document.getElementById('flash');
+  const btnPause = document.getElementById('btnPause');
+  const btnMute = document.getElementById('btnMute');
 
   const PAPER = '#ffffff';
   const DANGER = '#FF5A1F';
@@ -124,9 +183,10 @@
   }
 
   /* ---------------- 状态 ---------------- */
+  const TAP_LIFT = 0.24;     // 点按后自动抬脚时长
   const feet = [
-    { sources: new Set(), down: false, bob: 0 },
-    { sources: new Set(), down: false, bob: 0 }
+    { sources: new Set(), down: true, prevDown: true, lift: 0, bob: 0 },
+    { sources: new Set(), down: true, prevDown: true, lift: 0, bob: 0 }
   ];
 
   let state = 'ready'; // ready | playing | falling | over
@@ -161,7 +221,18 @@
   let beatPulse = 0;
   let beatCountdown = 2.5;
 
-  try { best = parseInt(localStorage.getItem('yibu.best.score') || '0', 10) || 0; } catch (e) {}
+  // 暂停 / 静音 / 冻结帧
+  let paused = false;
+  let resumeGrace = 0;
+  let freezeT = 0;
+  let muted = false;
+  let taught = false;
+
+  try {
+    best = parseInt(localStorage.getItem('yibu.best.score') || '0', 10) || 0;
+    muted = localStorage.getItem('yibu.muted') === '1';
+    taught = localStorage.getItem('yibu.taught') === '1';
+  } catch (e) {}
 
   /* ---------------- 音频 ---------------- */
   let ac = null, master = null;
@@ -173,8 +244,16 @@
     ac = new AC();
     if (ac.state === 'suspended') ac.resume();
     master = ac.createGain();
-    master.gain.value = 0.2;
+    master.gain.value = muted ? 0 : 0.16;
     master.connect(ac.destination);
+  }
+
+  function setMuted(m) {
+    muted = !!m;
+    if (master) master.gain.value = muted ? 0 : 0.16;
+    btnMute.classList.toggle('muted', muted);
+    btnMute.textContent = muted ? '静' : '音';
+    try { localStorage.setItem('yibu.muted', muted ? '1' : '0'); } catch (e) {}
   }
 
   function blip(freq, dur, type, vol, slideTo, delay) {
@@ -198,8 +277,8 @@
   function sfxPass() { blip(520, 0.035, 'square', 0.14); }
   function sfxTick() { blip(90, 0.02, 'square', 0.05); }
   function sfxFall() {
-    blip(190, 0.28, 'sawtooth', 0.5, 60);
-    blip(90, 0.4, 'square', 0.4, 40, 0.05);
+    blip(190, 0.28, 'sawtooth', 0.32, 60);
+    blip(90, 0.4, 'square', 0.3, 40, 0.05);
   }
 
   /* ---------------- 布局 ---------------- */
@@ -286,10 +365,14 @@
     fallT = 0;
     bobPhase = 0;
     bobY = 0;
-    feet.forEach((f) => { f.sources.clear(); f.bob = 0; f.down = false; });
+    feet.forEach((f) => { f.sources.clear(); f.bob = 0; f.down = true; f.prevDown = true; f.lift = 0; });
+    paused = false;
+    resumeGrace = 0;
+    freezeT = 0;
     resetProps();
     scoreAcc = 0;
     setScore(0);
+    syncMult();
     // 开局给一组目标，避免前几秒空跑
     addObstacle(randLane(), 95);
   }
@@ -298,6 +381,11 @@
     reset();
     state = 'playing';
     overlay.classList.add('hide');
+    if (!taught) {
+      taught = true;
+      try { localStorage.setItem('yibu.taught', '1'); } catch (e) {}
+      showTip('点左右半屏抬脚，抬对那只脚才能越过障碍', 3600);
+    }
   }
 
   function start() {
@@ -311,10 +399,33 @@
     overlay.innerHTML =
       '<div class="panel">' +
       '<div class="big">一步</div>' +
-      '<div class="sub">按住向前滑 · 抬脚越过障碍</div>' +
+      '<div class="sub">点左右半屏抬脚 · 抬对脚越过障碍</div>' +
+      '<div class="sub">双脚离地或单脚太久会摔</div>' +
       (best > 0 ? '<div class="sub">最佳 ' + best + '</div>' : '') +
-      '<div class="hint">按住开始</div>' +
+      '<div class="hint">点屏幕开始</div>' +
       '</div>';
+  }
+
+  let tipTimer = 0;
+  function showTip(text, ms) {
+    tipEl.textContent = text;
+    tipEl.classList.add('on');
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(() => tipEl.classList.remove('on'), ms);
+  }
+
+  function flashText(text) {
+    flashEl.textContent = text;
+    flashEl.classList.remove('pop');
+    void flashEl.offsetWidth;
+    flashEl.classList.add('pop');
+  }
+
+  function syncMult() {
+    const m = state === 'playing' ? mult() : 1;
+    multEl.classList.toggle('on', m > 1);
+    const bars = multEl.children;
+    for (let i = 0; i < bars.length; i++) bars[i].classList.toggle('f', i < m);
   }
 
   // 摔倒：所有失败共用这一段动画
@@ -324,6 +435,8 @@
     fallCause = cause || '';
     fallT = 0;
     bothUpT = 0;
+    freezeT = 0.07;
+    syncMult();
     sfxFall();
     for (let i = 0; i < 14; i++) {
       particles.push({
@@ -337,9 +450,16 @@
     }
   }
 
+  const CAUSE_TEXT = {
+    hit: '撞到了障碍',
+    balance: '单脚太久，失去平衡',
+    bothup: '双脚离地，直接摔了'
+  };
+
   function finishOver() {
     state = 'over';
     overAt = performance.now();
+    syncMult();
     const isNewBest = score > best;
     if (isNewBest) {
       best = score;
@@ -349,9 +469,32 @@
     overlay.innerHTML =
       '<div class="panel">' +
       '<div class="big">' + score + '</div>' +
+      '<div class="sub cause">' + (CAUSE_TEXT[fallCause] || '摔倒了') + '</div>' +
       '<div class="sub">' + (isNewBest ? '新纪录' : '最佳 ' + best) + '</div>' +
-      '<div class="hint">按住重来</div>' +
+      '<div class="hint">点屏幕重来</div>' +
       '</div>';
+  }
+
+  function setPaused(v) {
+    if (state !== 'playing' || paused === v) return;
+    paused = v;
+    pointerSide.forEach((side, id) => release(side, 'p' + id));
+    pointerSide.clear();
+    keysDown.forEach((side, id) => release(side, id));
+    keysDown.clear();
+    if (v) {
+      tipEl.classList.remove('on');
+      overlay.classList.remove('hide');
+      overlay.innerHTML =
+        '<div class="panel">' +
+        '<div class="big">暂停</div>' +
+        '<div class="sub">点屏幕继续</div>' +
+        '</div>';
+    } else {
+      overlay.classList.add('hide');
+      resumeGrace = 0.6;
+      if (ac && ac.state === 'suspended') ac.resume();
+    }
   }
 
   function doStep(side) {
@@ -420,6 +563,7 @@
     const f = feet[side];
     const wasDown = f.sources.size > 0;
     f.sources.add(id);
+    f.lift = TAP_LIFT;
     if (!wasDown) doStep(side);
   }
 
@@ -435,11 +579,16 @@
     e.preventDefault();
     audio();
 
+    if (paused) {
+      setPaused(false);
+      return;
+    }
     if (state === 'ready') {
       start();
+      return;
     } else if (state === 'over') {
-      if (performance.now() - overAt > 420) toPlaying();
-      else return;
+      if (performance.now() - overAt > 420) { toPlaying(); return; }
+      return;
     } else if (state === 'falling') {
       return;
     }
@@ -463,10 +612,25 @@
   window.addEventListener('blur', () => {
     pointerSide.forEach((side, id) => release(side, 'p' + id));
     pointerSide.clear();
+    if (state === 'playing' && !paused) setPaused(true);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && state === 'playing' && !paused) setPaused(true);
+  });
+
+  btnPause.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (paused) setPaused(false);
+    else if (state === 'playing') setPaused(true);
+  });
+  btnMute.addEventListener('click', (e) => {
+    e.preventDefault();
+    audio();
+    setMuted(!muted);
   });
 
   const KEY_SIDE = { KeyA: 0, ArrowLeft: 0, KeyL: 1, ArrowRight: 1 };
-  const keysDown = new Set();
+  const keysDown = new Map();
 
   window.addEventListener('keydown', (e) => {
     const side = KEY_SIDE[e.code];
@@ -474,11 +638,16 @@
     e.preventDefault();
     audio();
 
+    if (paused) {
+      setPaused(false);
+      return;
+    }
     if (state === 'ready') {
       start();
+      return;
     } else if (state === 'over') {
-      if (performance.now() - overAt > 420) toPlaying();
-      else return;
+      if (performance.now() - overAt > 420) { toPlaying(); return; }
+      return;
     } else if (state === 'falling') {
       return;
     }
@@ -486,7 +655,7 @@
 
     const id = 'k' + e.code;
     if (!keysDown.has(id)) {
-      keysDown.add(id);
+      keysDown.set(id, side);
       press(side, id);
     }
   });
@@ -549,12 +718,30 @@
       o.z -= speed * dt;
       if (!o.done && o.z <= HIT_Z) {
         o.done = true;
+        if (resumeGrace > 0) continue;
         if (feet[o.lane].down) {
           fall('hit');
           break;
         }
+        const prevMult = mult();
         combo++;
         sfxPass();
+        const hit = project(0, HIT_Z);
+        for (let k = 0; k < 5; k++) {
+          particles.push({
+            x: hit.x + (Math.random() - 0.5) * 14,
+            y: hit.y - 2,
+            vx: (Math.random() - 0.5) * 90,
+            vy: -30 - Math.random() * 70,
+            life: 0.32 + Math.random() * 0.2,
+            t: 0,
+            c: PIG.gold
+          });
+        }
+        if (mult() > prevMult) {
+          flashText('倍率 ×' + mult());
+          syncMult();
+        }
       }
     }
     obstacles = obstacles.filter((o) => o.z > Z_NEAR - 3);
@@ -591,8 +778,32 @@
   }
 
   /* ---------------- 更新 ---------------- */
+  function spawnLandingDust(i) {
+    const u = pigU();
+    const x = VW / 2 + (i === 0 ? -1 : 1) * 23 * u;
+    const c = mixHex(pal.road, '#ffffff', 0.55);
+    for (let k = 0; k < 4; k++) {
+      particles.push({
+        x: x + (Math.random() - 0.5) * 10,
+        y: skateY - 1,
+        vx: (Math.random() - 0.5) * 46,
+        vy: -14 - Math.random() * 30,
+        life: 0.28 + Math.random() * 0.18,
+        t: 0,
+        c: c
+      });
+    }
+  }
+
   function update(dt) {
-    for (const f of feet) f.down = f.sources.size > 0;
+    for (let i = 0; i < 2; i++) {
+      const f = feet[i];
+      f.lift = Math.max(0, f.lift - dt);
+      f.down = f.sources.size === 0 && f.lift <= 0;
+      if (state === 'playing' && f.down && !f.prevDown) spawnLandingDust(i);
+      f.prevDown = f.down;
+    }
+    if (resumeGrace > 0) resumeGrace = Math.max(0, resumeGrace - dt);
     updatePalette();
 
     if (state === 'playing') {
@@ -607,23 +818,27 @@
       bobPhase += speed * dt * 0.22;
       bobY = Math.sin(bobPhase) * 0.9;
 
-      // 失衡：单脚支撑累积，双脚支撑回落
+      // 失衡：单脚支撑累积，双脚支撑回落（恢复后的保护期内不算）
       const one = feet[0].down !== feet[1].down;
       if (one) {
-        balance += (0.45 + speed * 0.004) * dt;
-        if (balance >= 1) {
-          balance = 1;
-          fall('balance');
+        if (resumeGrace <= 0) {
+          balance += (0.45 + speed * 0.004) * dt;
+          if (balance >= 1) {
+            balance = 1;
+            fall('balance');
+          }
         }
-      } else if (!one) {
+      } else {
         balance = Math.max(0, balance - 1.2 * dt);
       }
 
       // 双脚离地
       const bothUp = !feet[0].down && !feet[1].down;
       if (bothUp) {
-        bothUpT += dt;
-        if (bothUpT > BOTH_UP_GRACE) fall('bothup');
+        if (resumeGrace <= 0) {
+          bothUpT += dt;
+          if (bothUpT > BOTH_UP_GRACE) fall('bothup');
+        }
       } else {
         bothUpT = 0;
       }
@@ -761,84 +976,48 @@
     }
   }
 
+  // 逐扫描线填充：保证路缘是硬像素边，不用抗锯齿路径
   function drawRoad() {
-    // 路面：交替色带
-    const step = 5;
-    for (let z = Z_NEAR; z < Z_FAR; z += step) {
-      const band = Math.floor((z + dist) / 9) % 2;
-      ctx.fillStyle = band ? pal.road2 : pal.road;
-      const a = project(-ROAD_HALF, z);
-      const b = project(ROAD_HALF, z);
-      const c = project(ROAD_HALF, z + step * 1.25);
-      const d = project(-ROAD_HALF, z + step * 1.25);
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.lineTo(c.x, c.y);
-      ctx.lineTo(d.x, d.y);
-      ctx.closePath();
-      ctx.fill();
-    }
+    const z0Beat = 18 + (1 - beatPulse) * 26;
+    for (let y = Math.max(horizon + 1, 0); y < VH; y++) {
+      const s = (y - horizon - bobY) / CAM_H;
+      if (s <= 0) continue;
+      const z = FOCAL / s;
+      if (z > Z_FAR || z < Z_NEAR) continue;
 
-    // 横向接缝
-    for (let z = Z_NEAR; z < Z_FAR; z += 2) {
-      if (((z + dist) % 14) >= 2) continue;
-      const a = project(-ROAD_HALF, z);
-      const b = project(ROAD_HALF, z);
-      const c = project(ROAD_HALF, z + 2.2);
-      const d = project(-ROAD_HALF, z + 2.2);
-      ctx.fillStyle = pal.seam;
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.lineTo(c.x, c.y);
-      ctx.lineTo(d.x, d.y);
-      ctx.closePath();
-      ctx.fill();
-    }
+      const c = project(0, z);
+      const half = ROAD_HALF * s;
+      const x0 = Math.round(c.x - half);
+      const x1 = Math.round(c.x + half);
+      const w = x1 - x0;
+      if (w < 1) continue;
 
-    // 边线
-    for (const side of [-1, 1]) {
-      ctx.beginPath();
-      for (let z = Z_NEAR; z <= Z_FAR; z += 6) {
-        const p = project(side * ROAD_HALF, z);
-        if (z === Z_NEAR) ctx.moveTo(p.x, p.y);
-        else ctx.lineTo(p.x, p.y);
-      }
-      ctx.strokeStyle = pal.edge;
-      ctx.lineWidth = 3;
-      ctx.stroke();
-    }
+      const t = z + dist;
+      const seam = (t % 14) < 2;
+      ctx.fillStyle = seam ? pal.seam : (Math.floor(t / 9) % 2 ? pal.road2 : pal.road);
+      ctx.fillRect(x0, y, w, 1);
 
-    // 中线虚线
-    for (let z = Z_NEAR; z < Z_FAR; z += 4) {
-      if (((z + dist) % 18) >= 9) continue;
-      const a = project(0, z);
-      const b = project(0, z + 3.8);
-      const w = Math.max(1, Math.round(0.3 * a.s));
+      // 两侧边线
+      const ew = Math.max(1, Math.min(3, Math.round(3 * s / S_HIT)));
       ctx.fillStyle = pal.edge;
-      ctx.globalAlpha = 0.65;
-      ctx.fillRect(Math.round(a.x - w / 2), Math.round(a.y), w, Math.max(1, Math.round(b.y - a.y)));
-      ctx.globalAlpha = 1;
-    }
+      ctx.fillRect(x0, y, ew, 1);
+      ctx.fillRect(x1 - ew, y, ew, 1);
 
-    // 节拍地鼓：扫过的亮带
-    if (beatPulse > 0.02) {
-      const z0 = 18 + (1 - beatPulse) * 26;
-      const a = project(-ROAD_HALF, z0);
-      const b = project(ROAD_HALF, z0);
-      const c = project(ROAD_HALF, z0 + 7);
-      const d = project(-ROAD_HALF, z0 + 7);
-      ctx.globalAlpha = beatPulse * 0.4;
-      ctx.fillStyle = pal.cloud;
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.lineTo(c.x, c.y);
-      ctx.lineTo(d.x, d.y);
-      ctx.closePath();
-      ctx.fill();
-      ctx.globalAlpha = 1;
+      // 中线虚线
+      if ((t % 18) < 9) {
+        const mw = Math.max(1, Math.round(0.45 * s));
+        ctx.globalAlpha = 0.65;
+        ctx.fillRect(Math.round(c.x - mw / 2), y, mw, 1);
+        ctx.globalAlpha = 1;
+      }
+
+      // 节拍地鼓：扫过的亮带
+      if (beatPulse > 0.02 && z >= z0Beat && z <= z0Beat + 7) {
+        ctx.globalAlpha = beatPulse * 0.4;
+        ctx.fillStyle = pal.cloud;
+        ctx.fillRect(x0, y, w, 1);
+        ctx.globalAlpha = 1;
+      }
     }
   }
 
@@ -1566,7 +1745,7 @@
 
     for (const p of particles) {
       ctx.globalAlpha = Math.max(0, 1 - p.t / p.life);
-      ctx.fillStyle = pal.ink;
+      ctx.fillStyle = p.c || pal.ink;
       ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
     }
     ctx.globalAlpha = 1;
@@ -1579,23 +1758,6 @@
       ctx.fillRect(0, VH - Math.round(2 + t * 6), VW, Math.round(2 + t * 6));
       ctx.globalAlpha = 1;
     }
-  }
-
-  function drawHUDText() {
-    if (state !== 'playing') return;
-
-    if (mult() > 1) {
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'top';
-      ctx.font = 'bold 9px ui-monospace, monospace';
-      ctx.fillStyle = pal.ink;
-      ctx.fillText('×' + mult(), VW - 5, 7);
-      ctx.fillStyle = DANGER;
-      ctx.fillText('×' + mult(), VW - 6, 6);
-    }
-
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
   }
 
   /* ---------------- 渲染 ---------------- */
@@ -1645,20 +1807,24 @@
 
     drawPlayer(tilt);
     drawEffects();
-    drawHUDText();
   }
 
   /* ---------------- 主循环 ---------------- */
   let lastTime = 0;
 
   function frame(now) {
-    const dt = Math.min(0.05, (now - lastTime) / 1000 || 0);
+    const raw = Math.min(0.05, (now - lastTime) / 1000 || 0);
     lastTime = now;
-    update(dt);
+    if (freezeT > 0) {
+      freezeT = Math.max(0, freezeT - raw);
+    } else if (!paused) {
+      update(raw);
+    }
     render();
     requestAnimationFrame(frame);
   }
 
+  setMuted(muted);
   resize();
   reset();
   showReady();
