@@ -90,15 +90,14 @@
 
   /* ---------------- 配色段落 ---------------- */
   const PALETTES = [
-    { sky1:'#6fc6e8', sky2:'#c9eff8', sun:'#fff3b0', cloud:'#ffffff', cloud2:'#d6ecf4', hill:'#8ed36f', hill2:'#6fbf58', road:'#e9dfae', road2:'#ded29a', seam:'#cfc489', edge:'#8a7f4e', prop:'#6fbf58', prop2:'#4e9e46', ground:'#7ecb5e', ground2:'#6fbb50', ink:'#22303c' },
-    { sky1:'#f7a86c', sky2:'#ffd9a3', sun:'#fff0c0', cloud:'#fff2e2', cloud2:'#f0cbb0', hill:'#c08a5c', hill2:'#9c6b47', road:'#eed9b2', road2:'#e2c9a0', seam:'#d1b68c', edge:'#8a6647', prop:'#b8875c', prop2:'#956840', ground:'#b08a58', ground2:'#9a7547', ink:'#3b2a20' },
-    { sky1:'#131c36', sky2:'#253258', sun:'#f4f6d8', cloud:'#2c3b63', cloud2:'#232f4f', hill:'#1e2b47', hill2:'#18223a', road:'#2c3a5a', road2:'#26324d', seam:'#1e2a42', edge:'#7088b6', prop:'#26344f', prop2:'#1c2740', ground:'#1b2740', ground2:'#162034', ink:'#0b1222' },
-    { sky1:'#93a7b2', sky2:'#ccd8de', sun:'#f2f5f0', cloud:'#ffffff', cloud2:'#ccd9df', hill:'#6e917f', hill2:'#587b6a', road:'#cad3ce', road2:'#bdc7c1', seam:'#a9b4ae', edge:'#5c6d65', prop:'#6e917f', prop2:'#587b6a', ground:'#6f8f7c', ground2:'#5f7f6e', ink:'#1f2b28' }
+    { sky1:'#57c6ec', sky2:'#a9e8f7', sun:'#fff4ad', cloud:'#ffffff', cloud2:'#d6f2fb', hill:'#46cf6c', hill2:'#2ba653', road:'#f3dda6', road2:'#e9cf90', seam:'#dcbd7c', edge:'#8a6538', prop:'#3ec95f', prop2:'#249b45', ground:'#66d167', ground2:'#54c25a', ink:'#1b2736' },
+    { sky1:'#ff9a5e', sky2:'#ffd9a6', sun:'#fff0b8', cloud:'#fff0dd', cloud2:'#f3c9a6', hill:'#c17b4a', hill2:'#9d5f37', road:'#f2d4a2', road2:'#e8c48e', seam:'#d8b079', edge:'#7d5330', prop:'#b8763f', prop2:'#95592c', ground:'#b98a4e', ground2:'#a5783f', ink:'#33231a' },
+    { sky1:'#0d1730', sky2:'#223659', sun:'#fff6c8', cloud:'#2b3f6b', cloud2:'#213252', hill:'#1d2f52', hill2:'#16243f', road:'#33436a', road2:'#2c3a5c', seam:'#22304d', edge:'#7f9ac9', prop:'#25406a', prop2:'#1a3054', ground:'#1b2c4c', ground2:'#152440', ink:'#060b16' },
+    { sky1:'#8fa3ae', sky2:'#d2e0e6', sun:'#f4f7f2', cloud:'#ffffff', cloud2:'#cddbe1', hill:'#6f9a7f', hill2:'#567f68', road:'#cfd9d2', road2:'#c1ccc4', seam:'#acb8b1', edge:'#54685e', prop:'#6f9a7f', prop2:'#567f68', ground:'#74a07f', ground2:'#638e70', ink:'#182420' }
   ];
-  const TUNNEL_PAL = { sky1:'#0e1118', sky2:'#161a22', sun:'#ffd27a', cloud:'#232833', cloud2:'#1b2029', hill:'#171b23', hill2:'#12161d', road:'#22252e', road2:'#1c1f27', seam:'#171a21', edge:'#5c667a', prop:'#1c212b', prop2:'#141821', ground:'#191c24', ground2:'#13161c', ink:'#05070b' };
+  const TUNNEL_PAL = { sky1:'#0b0f17', sky2:'#161c26', sun:'#ffcf7a', cloud:'#232b38', cloud2:'#1a212c', hill:'#161b24', hill2:'#11161e', road:'#242832', road2:'#1e222b', seam:'#181c24', edge:'#5d6a80', prop:'#1b222c', prop2:'#131922', ground:'#181c24', ground2:'#12161d', ink:'#04070c' };
   const PAL_KEYS = ['sky1','sky2','sun','cloud','cloud2','hill','hill2','road','road2','seam','edge','prop','prop2','ground','ground2','ink'];
   let pal = PALETTES[0];
-  let skyBands = [];
 
   function hx(c) {
     if (c.charAt(0) === '#') {
@@ -541,9 +540,6 @@
     const tm = tunnelMix();
     if (tm > 0) base = mixPal(base, TUNNEL_PAL, tm);
     pal = base;
-
-    skyBands.length = 0;
-    for (let i = 0; i < 12; i++) skyBands.push(mixHex(pal.sky1, pal.sky2, i / 11));
   }
 
   /* ---------------- 世界更新 ---------------- */
@@ -668,12 +664,12 @@
   ];
 
   function drawSky() {
-    const bands = skyBands.length ? skyBands : [pal.sky2];
-    const bh = Math.ceil((horizon + 2) / bands.length);
-    for (let i = 0; i < bands.length; i++) {
-      ctx.fillStyle = bands[i];
-      ctx.fillRect(0, i * bh, VW, bh);
-    }
+    // 参考图风格：大块纯色天空，只在地平线附近换一档色
+    const split = Math.round((horizon + 2) * 0.88);
+    ctx.fillStyle = pal.sky1;
+    ctx.fillRect(0, 0, VW, split);
+    ctx.fillStyle = pal.sky2;
+    ctx.fillRect(0, split, VW, horizon + 2 - split);
 
     // 太阳 / 月亮：阶梯像素圆
     const sx = Math.round(VW * 0.78);
@@ -695,10 +691,17 @@
     const h = Math.round(7 * s);
     const bx = Math.round(x);
     const by = Math.round(y);
+    const parts = [
+      [bx, by, w, h],
+      [bx + Math.round(5 * s), by - Math.round(4 * s), Math.round(11 * s), Math.round(5 * s)],
+      [bx + Math.round(12 * s), by - Math.round(2 * s), Math.round(9 * s), Math.round(4 * s)]
+    ];
+    // 墨色外轮廓
+    ctx.fillStyle = pal.ink;
+    for (const p of parts) ctx.fillRect(p[0] - 1, p[1] - 1, p[2] + 2, p[3] + 2);
     ctx.fillStyle = pal.cloud;
-    ctx.fillRect(bx, by, w, h);
-    ctx.fillRect(bx + Math.round(5 * s), by - Math.round(4 * s), Math.round(11 * s), Math.round(5 * s));
-    ctx.fillRect(bx + Math.round(12 * s), by - Math.round(2 * s), Math.round(9 * s), Math.round(4 * s));
+    for (const p of parts) ctx.fillRect(p[0], p[1], p[2], p[3]);
+    // 平涂的底部暗面
     ctx.fillStyle = pal.cloud2;
     ctx.fillRect(bx + 1, by + h - Math.max(1, Math.round(2 * s)), Math.max(1, w - 2), Math.max(1, Math.round(2 * s)));
   }
@@ -717,13 +720,24 @@
   }
 
   function drawHillLayer(baseY, amp, color, par, phase) {
+    const step = 2;
+    const pts = [];
     ctx.fillStyle = color;
-    const step = 4;
     for (let x = 0; x < VW; x += step) {
       const xx = x + dist * par + phase * 120;
       const h = Math.round(amp * (0.45 + 0.55 * Math.sin(xx * 0.028)));
+      pts.push({ x: x, y: baseY - h });
       ctx.fillRect(x, baseY - h, step, h + 4);
     }
+    // 山顶加一条粗墨线，贴近参考图的硬描边
+    ctx.strokeStyle = pal.ink;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      if (i === 0) ctx.moveTo(pts[i].x, pts[i].y);
+      else ctx.lineTo(pts[i].x, pts[i].y);
+    }
+    ctx.stroke();
   }
 
   function drawHills() {
@@ -732,27 +746,18 @@
     drawHillLayer(horizon + 1, 22 + Math.round(8 * (1 - tm)), pal.hill, 1.15, 1.7);
   }
 
-  // 路面两侧的草地：填满地平线以下，带随镜头滚动的透视色带
+  // 路面两侧的草地：平涂底色 + 屏幕空间棋盘点阵（参考图的地面纹理）
   function drawGround() {
     ctx.fillStyle = pal.ground;
     ctx.fillRect(0, horizon, VW, VH - horizon);
 
-    const step = 6;
-    const BIG = ROAD_HALF * 6;
-    for (let z = Z_NEAR; z < Z_FAR; z += step) {
-      if (Math.floor((z + dist) / 12) % 2 !== 0) continue;
-      const a = project(-BIG, z);
-      const b = project(BIG, z);
-      const c = project(BIG, z + step * 1.25);
-      const d = project(-BIG, z + step * 1.25);
-      ctx.fillStyle = pal.ground2;
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.lineTo(c.x, c.y);
-      ctx.lineTo(d.x, d.y);
-      ctx.closePath();
-      ctx.fill();
+    ctx.fillStyle = pal.ground2;
+    for (let y = horizon; y < VH; y += 4) {
+      const row = Math.round((y - horizon) / 4);
+      const w = 2 + Math.round((y - horizon) / 30);
+      for (let x = (row % 2) * w; x < VW; x += w * 2) {
+        ctx.fillRect(x, y, w, 4);
+      }
     }
   }
 
@@ -801,7 +806,7 @@
         else ctx.lineTo(p.x, p.y);
       }
       ctx.strokeStyle = pal.edge;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 3;
       ctx.stroke();
     }
 
@@ -852,8 +857,11 @@
       ctx.globalAlpha = alpha;
 
       // 树干
-      const trunkW = Math.max(2, Math.round(w * 0.16));
+      const trunkW = Math.max(2, Math.round(w * 0.2));
       const trunkH = Math.round(h * 0.34);
+      // 硬边投影
+      ctx.fillStyle = pal.ground2;
+      ctx.fillRect(Math.round(cx - w * 0.4), baseY - 1, Math.max(3, Math.round(w * 0.8)), 2);
       ctx.fillStyle = pal.ink;
       ctx.fillRect(cx - Math.round(trunkW / 2), baseY - trunkH, trunkW, trunkH);
       ctx.fillStyle = pal.prop2;
@@ -875,7 +883,7 @@
         const ly = baseY - Math.round(h * (L.bf + L.hf));
         box.push({ lx: lx, ly: ly, lw: lw, lh: lh });
         ctx.fillStyle = pal.ink;
-        ctx.fillRect(lx - 1, ly - 1, lw + 2, lh + 2);
+        ctx.fillRect(lx - 2, ly - 2, lw + 4, lh + 4);
       }
       for (let i = 0; i < box.length; i++) {
         const b = box[i];
@@ -1017,7 +1025,8 @@
   }
 
   // 左右对称的像素圆块：先描边再填色，只留外轮廓
-  function pigBlob(cx, top, rows, fill, shade) {
+  function pigBlob(cx, top, rows, fill, shade, ow) {
+    const o = Math.max(1, Math.round(ow || 1));
     let y = Math.round(top);
     const boxes = [];
     for (const r of rows) {
@@ -1025,7 +1034,7 @@
       const h = Math.max(1, Math.round(r.h));
       const x = Math.round(cx - w / 2);
       ctx.fillStyle = pal.ink;
-      ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+      ctx.fillRect(x - o, y - o, w + o * 2, h + o * 2);
       boxes.push({ x: x, y: y, w: w, h: h });
       y += h;
     }
@@ -1034,11 +1043,28 @@
       ctx.fillRect(b.x, b.y, b.w, b.h);
     }
     if (shade && boxes.length) {
-      const b = boxes[boxes.length - 1];
+      // 右缘 + 底缘的硬边暗面，模仿参考图
+      for (let i = 2; i < boxes.length; i++) {
+        const b = boxes[i];
+        ctx.fillStyle = shade;
+        ctx.fillRect(b.x + b.w - o, b.y, o, b.h);
+      }
+      const last = boxes[boxes.length - 1];
       ctx.fillStyle = shade;
-      ctx.fillRect(b.x + 1, b.y + Math.max(0, b.h - 2), Math.max(1, b.w - 2), Math.min(2, b.h));
+      ctx.fillRect(last.x + o, last.y + Math.max(0, last.h - o), Math.max(1, last.w - o * 2), o);
     }
     return boxes;
+  }
+
+  // 像素圆盘：用逐行 fillRect 画，避免 arc 的抗锯齿破坏像素感
+  function pixelDisc(x, y, r, color) {
+    const R = Math.max(1, Math.round(r));
+    ctx.fillStyle = color;
+    for (let dy = -R; dy <= R; dy++) {
+      const half = Math.round(Math.sqrt(Math.max(0, R * R - dy * dy)));
+      if (half <= 0) continue;
+      ctx.fillRect(Math.round(x) - half, Math.round(y) + dy, half * 2, 1);
+    }
   }
 
   // 侧后方视角的四轮旱冰鞋：靴筒在脚跟一侧，鞋头朝外
@@ -1191,13 +1217,13 @@
     const bodyBottom = ground - 22 * u - bob - air;
     const bodyTop = bodyBottom - 62 * u;
     const headTop = bodyTop - 18 * u;
+    const shCol = mixHex(pal.road2, pal.ink, 0.26);
 
-    // 地面影子
-    ctx.globalAlpha = 0.14;
-    ctx.fillStyle = pal.ink;
-    ctx.fillRect(Math.round(cx - 28 * u), Math.round(ground), Math.round(56 * u), Math.max(1, Math.round(1.5 * u)));
-    ctx.fillRect(Math.round(cx - 18 * u), Math.round(ground + 2 * u), Math.round(36 * u), Math.max(1, Math.round(1.5 * u)));
-    ctx.globalAlpha = 1;
+    // 地面影子：平涂色块，不用渐变
+    const gy = Math.round(ground);
+    ctx.fillStyle = shCol;
+    ctx.fillRect(Math.round(cx - 31 * u), gy, Math.round(62 * u), Math.max(1, Math.round(2 * u)));
+    ctx.fillRect(Math.round(cx - 25 * u), gy + Math.max(1, Math.round(2 * u)), Math.round(50 * u), Math.max(1, Math.round(1 * u)));
 
     // 腿与旱冰鞋
     const wob = (playing && ss >= 0 && balance > 0.45)
@@ -1226,10 +1252,8 @@
         pigLimb(kneeX, kneeY, footX, footY - 8 * u, Math.max(3, Math.round(9 * u)));
       }
 
-      ctx.globalAlpha = down ? 0.15 : 0.07;
-      ctx.fillStyle = pal.ink;
+      ctx.fillStyle = shCol;
       ctx.fillRect(Math.round(baseX - 7 * u), Math.round(ground - 1), Math.round(14 * u), Math.max(1, Math.round(2 * u)));
-      ctx.globalAlpha = 1;
       drawPigSkate(footX, footY, u, i === 0 ? -1 : 1);
     }
 
@@ -1250,7 +1274,7 @@
       { w: 36 * u, h: 3 * u },
       { w: 26 * u, h: 2 * u }
     ];
-    pigBlob(cx + shift, bodyTop, bodyRows, PIG.skin, PIG.skin2);
+    pigBlob(cx + shift, bodyTop, bodyRows, PIG.skin, PIG.skin2, 2);
 
     // 左上高光
     ctx.fillStyle = PIG.light;
@@ -1263,46 +1287,35 @@
       ctx.fillRect(hx0 + 3 * u, hy0 + 14 * u, 2 * u, Math.max(1, Math.round(2 * u)));
     }
 
-    // 卷尾：屁股中央的同心螺旋
+    // 卷尾：屁股中央的像素同心螺旋
     const tx = cx + shift;
     const ty = bodyTop + 31 * u;
-    ctx.fillStyle = pal.ink;
-    ctx.beginPath();
-    ctx.arc(tx, ty, 6.4 * u, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = PIG.skin;
-    ctx.beginPath();
-    ctx.arc(tx, ty, 4.8 * u, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = pal.ink;
-    ctx.beginPath();
-    ctx.arc(tx, ty, 3.2 * u, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = PIG.skin;
-    ctx.beginPath();
-    ctx.arc(tx, ty, 1.8 * u, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = pal.ink;
-    ctx.beginPath();
-    ctx.arc(tx, ty, 0.8 * u, 0, Math.PI * 2);
-    ctx.fill();
+    pixelDisc(tx, ty, 7 * u, pal.ink);
+    pixelDisc(tx, ty, 5.2 * u, PIG.skin);
+    pixelDisc(tx, ty, 3.2 * u, pal.ink);
+    pixelDisc(tx, ty, 1.5 * u, PIG.light);
 
     // 大圆垂耳：先画，头盔随后盖住耳根
     for (const dir of [-1, 1]) {
-      const ex = cx + shift + dir * 21 * u;
-      const ey = headTop + 12 * u;
-      ctx.beginPath();
-      ctx.ellipse(ex, ey, 8 * u, 9.5 * u, dir * 0.6, 0, Math.PI * 2);
-      ctx.fillStyle = PIG.skin;
-      ctx.fill();
-      ctx.strokeStyle = pal.ink;
-      ctx.lineWidth = Math.max(1, 1.4 * u);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.ellipse(ex, ey, 4 * u, 5.4 * u, dir * 0.6, 0, Math.PI * 2);
-      ctx.strokeStyle = PIG.skin2;
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      const ex = cx + shift + dir * 20 * u;
+      const ey = headTop + 5 * u;
+      const earRows = [
+        { w: 5 * u, h: 2 * u }, { w: 9 * u, h: 2 * u }, { w: 13 * u, h: 3 * u },
+        { w: 15 * u, h: 3 * u }, { w: 15 * u, h: 3 * u }, { w: 13 * u, h: 2 * u },
+        { w: 10 * u, h: 2 * u }, { w: 6 * u, h: 2 * u }
+      ];
+      pigBlob(ex + dir * 1 * u, ey, earRows, PIG.skin, null, 1);
+      // 内耳：不描边，只铺一层深粉
+      const innerRows = [
+        { w: 2 * u, h: 2 * u }, { w: 4 * u, h: 2 * u }, { w: 5 * u, h: 2 * u },
+        { w: 5 * u, h: 2 * u }, { w: 4 * u, h: 2 * u }, { w: 2 * u, h: 2 * u }
+      ];
+      let innerY = Math.round(ey + 6 * u);
+      for (const r of innerRows) {
+        ctx.fillStyle = PIG.skin2;
+        ctx.fillRect(Math.round(ex + dir * 2 * u - r.w / 2), innerY, Math.max(1, Math.round(r.w)), Math.max(1, Math.round(r.h)));
+        innerY += Math.max(1, Math.round(r.h));
+      }
     }
 
     // 参考图的蓝灰头罩
@@ -1316,7 +1329,7 @@
       { w: 26 * u, h: 2 * u },
       { w: 18 * u, h: 2 * u }
     ];
-    pigBlob(cx + shift, headTop, headRows, PIG.helm, PIG.helm3);
+    pigBlob(cx + shift, headTop, headRows, PIG.helm, PIG.helm3, 2);
 
     // 头顶青色高光
     ctx.fillStyle = PIG.cyan;
@@ -1326,7 +1339,7 @@
     ctx.fillRect(Math.round(cx + shift - 6 * u), Math.round(headTop + 3 * u), Math.max(1, Math.round(4 * u)), Math.max(1, Math.round(2 * u)));
 
     // 头罩上的两个深色圆点
-    ctx.fillStyle = PIG.helm3;
+    ctx.fillStyle = pal.ink;
     ctx.fillRect(Math.round(cx + shift - 7 * u), Math.round(headTop + 14 * u), Math.max(1, Math.round(2 * u)), Math.max(1, Math.round(3 * u)));
     ctx.fillRect(Math.round(cx + shift + 5 * u), Math.round(headTop + 14 * u), Math.max(1, Math.round(2 * u)), Math.max(1, Math.round(3 * u)));
 
@@ -1339,16 +1352,32 @@
       ctx.fillStyle = PIG.collar;
       ctx.fillRect(Math.round(cx + shift - neckW / 2), neckY, neckW, Math.max(1, Math.round(1.2 * u)));
 
-      const dx = Math.round(cx + shift + 16 * u);
-      const dy = neckY + Math.max(1, Math.round(1.2 * u));
-      const dW = Math.max(2, Math.round(3 * u));
-      const dH = Math.max(4, Math.round(9 * u));
+      // 右侧斜垂的扣带（参考图里那条垂下来的带子）
+      const sx = Math.round(cx + shift + 12 * u);
+      const sy = neckY + Math.max(1, Math.round(1.2 * u));
+      const sw = Math.max(2, Math.round(3 * u));
+      const shh = Math.max(2, Math.round(2.4 * u));
+      const segN = 5;
+      for (let i = 0; i < segN; i++) {
+        const px = sx + Math.round(i * 1.7 * u);
+        const py = sy + i * shh;
+        ctx.fillStyle = pal.ink;
+        ctx.fillRect(px - 1, py - 1, sw + 2, shh + 2);
+      }
+      for (let i = 0; i < segN; i++) {
+        const px = sx + Math.round(i * 1.7 * u);
+        const py = sy + i * shh;
+        ctx.fillStyle = PIG.collar;
+        ctx.fillRect(px, py, sw, shh);
+      }
+      // 末端浅色扣件
+      const bx2 = sx + Math.round((segN - 1) * 1.7 * u);
+      const by2 = sy + segN * shh - Math.max(1, Math.round(1 * u));
+      const bh2 = Math.max(2, Math.round(2.4 * u));
       ctx.fillStyle = pal.ink;
-      ctx.fillRect(dx - 1, dy - 1, dW + 2, dH + 2);
-      ctx.fillStyle = PIG.collar;
-      ctx.fillRect(dx, dy, dW, dH);
+      ctx.fillRect(bx2 - 1, by2 - 1, sw + 2, bh2 + 2);
       ctx.fillStyle = PIG.helm2;
-      ctx.fillRect(dx, dy + dH - 3, dW, 2);
+      ctx.fillRect(bx2, by2, sw, bh2);
     }
 
     // 失衡提示：支撑脚光环 + 头顶叹号
@@ -1539,7 +1568,6 @@
     if (bs >= 0 && balance > 0.02) {
       const dir = bs === 0 ? -1 : 1;
       leanX = dir * balance * 9;
-      tilt = dir * balance * 0.035;
       if (balance > 0.68) {
         shakeX = Math.sin(performance.now() * 0.05) * (balance - 0.68) * 8;
       }
@@ -1547,11 +1575,6 @@
 
     ctx.save();
     ctx.translate(leanX + shakeX, 0);
-    if (tilt !== 0) {
-      ctx.translate(VW / 2, VH);
-      ctx.rotate(tilt * 0.5);
-      ctx.translate(-VW / 2, -VH);
-    }
     if (curveAmt > 0.001 && curve) {
       const roll = curveAmt * (curve.side === 0 ? -0.08 : 0.08);
       ctx.translate(VW / 2, horizon * 1.3);
