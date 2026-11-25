@@ -106,8 +106,8 @@
 <div id="overlay">
   <div class="panel">
     <div class="big">一步</div>
-    <div class="sub">点左右半屏抬脚 · 抬对脚越过障碍</div>
-    <div class="hint">点屏幕开始</div>
+    <div class="sub">按住向前滑 · 松开一侧抬脚越障</div>
+    <div class="hint">按住开始</div>
   </div>
 </div>
 <div id="btns">
@@ -183,10 +183,10 @@
   }
 
   /* ---------------- 状态 ---------------- */
-  const TAP_LIFT = 0.24;     // 点按后自动抬脚时长
+  const RESUME_PLANT = 1.2;  // 恢复后双脚落地的保护时长
   const feet = [
-    { sources: new Set(), down: true, prevDown: true, lift: 0, bob: 0 },
-    { sources: new Set(), down: true, prevDown: true, lift: 0, bob: 0 }
+    { sources: new Set(), down: false, prevDown: true, plant: 0, bob: 0 },
+    { sources: new Set(), down: false, prevDown: true, plant: 0, bob: 0 }
   ];
 
   let state = 'ready'; // ready | playing | falling | over
@@ -365,7 +365,7 @@
     fallT = 0;
     bobPhase = 0;
     bobY = 0;
-    feet.forEach((f) => { f.sources.clear(); f.bob = 0; f.down = true; f.prevDown = true; f.lift = 0; });
+    feet.forEach((f) => { f.sources.clear(); f.bob = 0; f.down = false; f.prevDown = true; f.plant = 0; });
     paused = false;
     resumeGrace = 0;
     freezeT = 0;
@@ -384,7 +384,7 @@
     if (!taught) {
       taught = true;
       try { localStorage.setItem('yibu.taught', '1'); } catch (e) {}
-      showTip('点左右半屏抬脚，抬对那只脚才能越过障碍', 3600);
+      showTip('按住左右半屏向前滑，松开哪边就抬哪只脚', 3600);
     }
   }
 
@@ -399,10 +399,10 @@
     overlay.innerHTML =
       '<div class="panel">' +
       '<div class="big">一步</div>' +
-      '<div class="sub">点左右半屏抬脚 · 抬对脚越过障碍</div>' +
+      '<div class="sub">按住向前滑 · 松开一侧抬脚越障</div>' +
       '<div class="sub">双脚离地或单脚太久会摔</div>' +
       (best > 0 ? '<div class="sub">最佳 ' + best + '</div>' : '') +
-      '<div class="hint">点屏幕开始</div>' +
+      '<div class="hint">按住开始</div>' +
       '</div>';
   }
 
@@ -471,7 +471,7 @@
       '<div class="big">' + score + '</div>' +
       '<div class="sub cause">' + (CAUSE_TEXT[fallCause] || '摔倒了') + '</div>' +
       '<div class="sub">' + (isNewBest ? '新纪录' : '最佳 ' + best) + '</div>' +
-      '<div class="hint">点屏幕重来</div>' +
+      '<div class="hint">按住重来</div>' +
       '</div>';
   }
 
@@ -493,6 +493,8 @@
     } else {
       overlay.classList.add('hide');
       resumeGrace = 0.6;
+      feet[0].plant = RESUME_PLANT;
+      feet[1].plant = RESUME_PLANT;
       if (ac && ac.state === 'suspended') ac.resume();
     }
   }
@@ -563,7 +565,6 @@
     const f = feet[side];
     const wasDown = f.sources.size > 0;
     f.sources.add(id);
-    f.lift = TAP_LIFT;
     if (!wasDown) doStep(side);
   }
 
@@ -579,16 +580,12 @@
     e.preventDefault();
     audio();
 
-    if (paused) {
-      setPaused(false);
-      return;
-    }
+    if (paused) setPaused(false);
     if (state === 'ready') {
       start();
-      return;
     } else if (state === 'over') {
-      if (performance.now() - overAt > 420) { toPlaying(); return; }
-      return;
+      if (performance.now() - overAt > 420) toPlaying();
+      else return;
     } else if (state === 'falling') {
       return;
     }
@@ -638,16 +635,12 @@
     e.preventDefault();
     audio();
 
-    if (paused) {
-      setPaused(false);
-      return;
-    }
+    if (paused) setPaused(false);
     if (state === 'ready') {
       start();
-      return;
     } else if (state === 'over') {
-      if (performance.now() - overAt > 420) { toPlaying(); return; }
-      return;
+      if (performance.now() - overAt > 420) toPlaying();
+      else return;
     } else if (state === 'falling') {
       return;
     }
@@ -798,8 +791,8 @@
   function update(dt) {
     for (let i = 0; i < 2; i++) {
       const f = feet[i];
-      f.lift = Math.max(0, f.lift - dt);
-      f.down = f.sources.size === 0 && f.lift <= 0;
+      f.plant = Math.max(0, f.plant - dt);
+      f.down = f.sources.size > 0 || f.plant > 0;
       if (state === 'playing' && f.down && !f.prevDown) spawnLandingDust(i);
       f.prevDown = f.down;
     }
