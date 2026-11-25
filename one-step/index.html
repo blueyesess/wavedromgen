@@ -227,8 +227,8 @@
     ROAD_HALF = (0.72 * VW) / S_HIT;
     CAM_H = (VH * 0.92 - horizon) / S_HIT;
 
-    skateL = Math.round(VW * 0.325);
-    skateR = Math.round(VW * 0.675);
+    skateL = Math.round(VW * 0.385);
+    skateR = Math.round(VW * 0.615);
     skateY = Math.round(horizon + CAM_H * S_HIT) - 2;
   }
 
@@ -996,7 +996,7 @@
   }
 
   /* ---------------- 玩家：背对镜头的小猪 ---------------- */
-  const PIG = { skin:'#f7a8b8', light:'#ffc9d4', skin2:'#e58ca0',
+  const PIG = { skin:'#f7a8b8', light:'#ffc9d4', skin2:'#e58ca0', maroon:'#6b3a45',
     denim:'#5b7fd4', denim2:'#3e5fac', denim3:'#7c9be6', gold:'#ffc94a', orange:'#ff8a5b' };
 
   function pigU() { return Math.max(0.55, Math.min(1.15, VH / 390)); }
@@ -1044,24 +1044,28 @@
   function drawPigSkate(x, y, u, side) {
     ctx.save();
     ctx.translate(Math.round(x), Math.round(y));
-    ctx.scale(side, 1);
+    ctx.scale(side * 1.2, 1.2);
 
-    // 轮子（侧面两颗大轮，浅色轮毂）
+    // 轮子（橙色大轮 + 奶油轮毂）
     for (const wx of [-3.9, 3.7]) {
       ctx.fillStyle = pal.ink;
       ctx.beginPath();
-      ctx.arc(Math.round(wx * u), Math.round(-2.6 * u), Math.max(2, Math.round(2.6 * u)), 0, Math.PI * 2);
+      ctx.arc(Math.round(wx * u), Math.round(-2.6 * u), Math.max(2, Math.round(2.7 * u)), 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#c6d0d6';
+      ctx.fillStyle = PIG.orange;
       ctx.beginPath();
-      ctx.arc(Math.round(wx * u), Math.round(-2.6 * u), Math.max(1, Math.round(1.4 * u)), 0, Math.PI * 2);
+      ctx.arc(Math.round(wx * u), Math.round(-2.6 * u), Math.max(1, Math.round(2 * u)), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fffdf4';
+      ctx.beginPath();
+      ctx.arc(Math.round(wx * u), Math.round(-2.6 * u), Math.max(1, Math.round(0.9 * u)), 0, Math.PI * 2);
       ctx.fill();
     }
 
     // 底板
     ctx.fillStyle = pal.ink;
     ctx.fillRect(Math.round(-6.6 * u), Math.round(-7.2 * u), Math.max(6, Math.round(13.2 * u)), Math.max(2, Math.round(2.6 * u)));
-    ctx.fillStyle = '#4a5560';
+    ctx.fillStyle = PIG.denim2;
     ctx.fillRect(Math.round(-5.8 * u), Math.round(-6.7 * u), Math.max(4, Math.round(11.6 * u)), Math.max(1, Math.round(1.4 * u)));
 
     // 靴身：前掌 + 高帮
@@ -1072,11 +1076,15 @@
     ctx.fillRect(Math.round(-5.8 * u), Math.round(-9.8 * u), Math.max(6, Math.round(11 * u)), Math.max(2, Math.round(3 * u)));
     ctx.fillRect(Math.round(-5.8 * u), Math.round(-15 * u), Math.max(4, Math.round(6.2 * u)), Math.max(4, Math.round(6.6 * u)));
 
-    // 橙色靴口
-    ctx.fillStyle = PIG.orange;
-    ctx.fillRect(Math.round(-5.8 * u), Math.round(-15 * u), Math.max(4, Math.round(6.2 * u)), Math.max(1, Math.round(1.8 * u)));
+    // 栗色靴口 + 蓝色搭扣带
+    ctx.fillStyle = PIG.maroon;
+    ctx.fillRect(Math.round(-5.8 * u), Math.round(-15 * u), Math.max(4, Math.round(6.2 * u)), Math.max(1, Math.round(2.6 * u)));
+    ctx.fillStyle = PIG.denim;
+    ctx.fillRect(Math.round(-5.8 * u), Math.round(-11.6 * u), Math.max(4, Math.round(6.2 * u)), Math.max(1, Math.round(1.4 * u)));
+
     // 鞋头刹车
-    ctx.fillRect(Math.round(4.8 * u), Math.round(-6.6 * u), Math.max(1, Math.round(1.8 * u)), Math.max(1, Math.round(1.6 * u)));
+    ctx.fillStyle = PIG.orange;
+    ctx.fillRect(Math.round(4.6 * u), Math.round(-6.6 * u), Math.max(1, Math.round(2.2 * u)), Math.max(1, Math.round(1.8 * u)));
 
     ctx.restore();
   }
@@ -1130,16 +1138,16 @@
   }
 
   // 单脚支撑时头顶的叹号，随失衡值变大、跳动
-  function drawWarnBang(x, topY) {
+  function drawWarnBang(x, topY, su) {
     if (balance < 0.2) return;
     const k = Math.min(1, (balance - 0.2) / 0.45);
     const now = performance.now();
     const pulse = 0.75 + 0.25 * Math.sin(now * 0.018);
-    const s = Math.max(1, Math.round(VW / 90));
-    const w = 2 * s;
-    const barH = 5 * s;
-    const gap = 2 * s;
-    const dotH = 2 * s;
+    const s = Math.max(1, Math.round(su || 1));
+    const w = 3 * s;
+    const barH = 7 * s;
+    const gap = 3 * s;
+    const dotH = 3 * s;
     const cx = Math.round(x);
     const top = Math.round(topY - Math.sin(now * 0.012) * 2);
 
@@ -1179,15 +1187,15 @@
     const shift = lean + sway;
 
     const air = bothUp ? 3 * u : 0;
-    const bodyBottom = ground - 25 * u - bob - air;
-    const bodyTop = bodyBottom - 33 * u;
-    const headTop = bodyTop - 25 * u;
+    const bodyBottom = ground - 22 * u - bob - air;
+    const bodyTop = bodyBottom - 52 * u;
+    const headTop = bodyTop - 16 * u;
 
     // 地面影子
     ctx.globalAlpha = 0.14;
     ctx.fillStyle = pal.ink;
-    ctx.fillRect(Math.round(cx - 20 * u), Math.round(ground), Math.round(40 * u), Math.max(1, Math.round(1.5 * u)));
-    ctx.fillRect(Math.round(cx - 13 * u), Math.round(ground + 2 * u), Math.round(26 * u), Math.max(1, Math.round(1.5 * u)));
+    ctx.fillRect(Math.round(cx - 23 * u), Math.round(ground), Math.round(46 * u), Math.max(1, Math.round(1.5 * u)));
+    ctx.fillRect(Math.round(cx - 15 * u), Math.round(ground + 2 * u), Math.round(30 * u), Math.max(1, Math.round(1.5 * u)));
     ctx.globalAlpha = 1;
 
     // 腿与旱冰鞋
@@ -1202,19 +1210,19 @@
       const footX = baseX + (ss === i ? wob : 0) - (down ? 0 : dir * 2 * u);
       const lift = down ? 0 : (bothUp ? 10 * u : 14 * u);
       const footY = ground - lift;
-      const hipX = cx + dir * 10 * u + shift;
-      const hipY = bodyBottom + 3 * u;
+      const hipX = cx + dir * 14 * u + shift;
+      const hipY = bodyBottom + 2 * u;
 
       if (down) {
-        const kneeX = hipX + (footX - hipX) * 0.35 + dir * 3 * u;
+        const kneeX = hipX + (footX - hipX) * 0.35 + dir * 2 * u;
         const kneeY = hipY + (footY - hipY) * 0.55;
-        pigLimb(hipX, hipY, kneeX, kneeY, Math.max(4, Math.round(8 * u)));
-        pigLimb(kneeX, kneeY, footX, footY - 9 * u, Math.max(4, Math.round(8 * u)));
+        pigLimb(hipX, hipY, kneeX, kneeY, Math.max(4, Math.round(9 * u)));
+        pigLimb(kneeX, kneeY, footX, footY - 9 * u, Math.max(4, Math.round(9 * u)));
       } else {
-        const kneeX = hipX + (footX - hipX) * 0.45 + dir * 3 * u;
+        const kneeX = hipX + (footX - hipX) * 0.45 + dir * 2 * u;
         const kneeY = hipY + (footY - hipY) * 0.55;
-        pigLimb(hipX, hipY, kneeX, kneeY, Math.max(4, Math.round(8 * u)));
-        pigLimb(kneeX, kneeY, footX, footY - 8 * u, Math.max(3, Math.round(7 * u)));
+        pigLimb(hipX, hipY, kneeX, kneeY, Math.max(4, Math.round(9 * u)));
+        pigLimb(kneeX, kneeY, footX, footY - 8 * u, Math.max(3, Math.round(8 * u)));
       }
 
       ctx.globalAlpha = down ? 0.15 : 0.07;
@@ -1224,58 +1232,88 @@
       drawPigSkate(footX, footY, u, i === 0 ? -1 : 1);
     }
 
-    // 身体
+    // 身体：参考图的大圆屁股
     const bodyRows = [
-      { w: 26 * u, h: 4 * u },
-      { w: 38 * u, h: 8 * u },
-      { w: 46 * u, h: 12 * u },
+      { w: 14 * u, h: 3 * u },
+      { w: 24 * u, h: 4 * u },
+      { w: 32 * u, h: 5 * u },
       { w: 40 * u, h: 6 * u },
-      { w: 30 * u, h: 3 * u }
+      { w: 48 * u, h: 7 * u },
+      { w: 52 * u, h: 8 * u },
+      { w: 52 * u, h: 8 * u },
+      { w: 48 * u, h: 5 * u },
+      { w: 40 * u, h: 4 * u },
+      { w: 32 * u, h: 2 * u }
     ];
     pigBlob(cx + shift, bodyTop, bodyRows, PIG.skin, PIG.skin2);
 
-    // 背部受光
+    // 左上高光
     ctx.fillStyle = PIG.light;
-    ctx.fillRect(Math.round(cx + shift - 18 * u), Math.round(bodyTop + 4 * u), Math.max(1, Math.round(4 * u)), Math.max(1, Math.round(9 * u)));
+    ctx.fillRect(Math.round(cx + shift - 16 * u), Math.round(bodyTop + 8 * u), Math.max(1, Math.round(6 * u)), Math.max(1, Math.round(13 * u)));
+    ctx.fillRect(Math.round(cx + shift - 12 * u), Math.round(bodyTop + 5 * u), Math.max(1, Math.round(4 * u)), Math.max(1, Math.round(4 * u)));
 
-    // 牛仔短裤：从腰线盖住身体下半段
+    // 卷尾：屁股中央的同心螺旋
+    const tx = cx + shift;
+    const ty = bodyTop + 27 * u;
+    ctx.fillStyle = pal.ink;
+    ctx.beginPath();
+    ctx.arc(tx, ty, 5.4 * u, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = PIG.skin;
+    ctx.beginPath();
+    ctx.arc(tx, ty, 4.0 * u, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = pal.ink;
+    ctx.beginPath();
+    ctx.arc(tx, ty, 2.6 * u, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = PIG.skin;
+    ctx.beginPath();
+    ctx.arc(tx, ty, 1.4 * u, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = pal.ink;
+    ctx.beginPath();
+    ctx.arc(tx, ty, 0.6 * u, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 短款背带裤：只盖住屁股下缘
     const shortRows = [
-      { w: 46 * u, h: 9 * u },
-      { w: 40 * u, h: 6 * u },
-      { w: 30 * u, h: 3 * u }
+      { w: 52 * u, h: 5 * u },
+      { w: 48 * u, h: 3 * u },
+      { w: 40 * u, h: 2 * u }
     ];
-    pigBlob(cx + shift, bodyTop + 15 * u, shortRows, PIG.denim, PIG.denim2);
+    pigBlob(cx + shift, bodyTop + 42 * u, shortRows, PIG.denim, PIG.denim2);
 
     // 深色裤腰
     ctx.fillStyle = PIG.denim2;
-    ctx.fillRect(Math.round(cx + shift - 21 * u), Math.round(bodyTop + 15 * u), Math.round(42 * u), Math.max(1, Math.round(3 * u)));
+    ctx.fillRect(Math.round(cx + shift - 24 * u), Math.round(bodyTop + 42 * u), Math.round(48 * u), Math.max(1, Math.round(2 * u)));
 
     // 背带 + 金扣
-    const strapW = Math.max(2, Math.round(4 * u));
+    const strapW = Math.max(2, Math.round(4.5 * u));
     for (const dir of [-1, 1]) {
-      const sxp = Math.round(cx + shift + dir * 9 * u - strapW / 2);
-      const syTop = Math.round(bodyTop + 1 * u);
-      const sH = Math.round(bodyTop + 16 * u) - syTop;
+      const sxp = Math.round(cx + shift + dir * 13 * u - strapW / 2);
+      const syTop = Math.round(bodyTop + 2 * u);
+      const sH = Math.round(bodyTop + 44 * u) - syTop;
       ctx.fillStyle = pal.ink;
       ctx.fillRect(sxp - 1, syTop - 1, strapW + 2, sH + 2);
       ctx.fillStyle = PIG.denim;
       ctx.fillRect(sxp, syTop, strapW, sH);
 
-      const bxp = Math.round(cx + shift + dir * 9 * u);
-      const byp = Math.round(bodyTop + 15 * u);
-      const br = Math.max(1, Math.round(2.2 * u));
+      const bxp = Math.round(cx + shift + dir * 13 * u);
+      const byp = Math.round(bodyTop + 42 * u);
+      const br = Math.max(1, Math.round(2 * u));
       ctx.fillStyle = pal.ink;
       ctx.fillRect(bxp - br, byp - br, br * 2, br * 2);
       ctx.fillStyle = PIG.gold;
-      ctx.fillRect(bxp - Math.max(1, br - 1), byp - Math.max(1, br - 1), Math.max(1, br * 2 - 2), Math.max(1, br * 2 - 2));
+      ctx.fillRect(bxp - br + 1, byp - br + 1, br * 2 - 2, br * 2 - 2);
     }
 
     // 屁股口袋
     const pW = Math.max(3, Math.round(6 * u));
-    const pH = Math.max(3, Math.round(5 * u));
-    const pT = Math.round(bodyTop + 20 * u);
+    const pH = Math.max(3, Math.round(4 * u));
+    const pT = Math.round(bodyTop + 45 * u);
     for (const dir of [-1, 1]) {
-      const pxl = Math.round(cx + shift + dir * 13 * u - pW / 2);
+      const pxl = Math.round(cx + shift + dir * 16 * u - pW / 2);
       ctx.fillStyle = pal.ink;
       ctx.fillRect(pxl - 1, pT - 1, pW + 2, pH + 2);
       ctx.fillStyle = PIG.denim3;
@@ -1286,90 +1324,73 @@
 
     // 右口袋上的金色心形补丁（像素心）
     {
-      const hpx = Math.round(cx + shift + 13 * u);
-      const hpy = Math.round(bodyTop + 22.5 * u);
-      const hw = Math.max(1, Math.round(1.5 * u));
-      const hh = Math.max(1, Math.round(1.5 * u));
+      const hpx = Math.round(cx + shift + 16 * u);
+      const hpy = Math.round(bodyTop + 46 * u);
       ctx.fillStyle = PIG.gold;
-      ctx.fillRect(hpx - hw, hpy - hh, hw, hh);
-      ctx.fillRect(hpx, hpy - hh, hw, hh);
-      ctx.fillRect(hpx - hw, hpy, hw * 2, hh);
-      ctx.fillRect(hpx - 1, hpy + hh, Math.max(1, hw - 1), 1);
+      ctx.fillRect(hpx - 2, hpy - 1, 2, 1);
+      ctx.fillRect(hpx, hpy - 1, 2, 1);
+      ctx.fillRect(hpx - 2, hpy, 4, 1);
+      ctx.fillRect(hpx - 1, hpy + 1, 2, 1);
     }
-
-    // 卷尾：右侧髋部，探出短裤边缘
-    const tx = cx + shift + 22 * u;
-    const ty = bodyTop + 25.5 * u;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = pal.ink;
-    ctx.lineWidth = Math.max(2, 2.2 * u);
-    ctx.beginPath();
-    ctx.arc(tx, ty, 3.4 * u, Math.PI * 0.55, Math.PI * 2.45);
-    ctx.stroke();
-    ctx.strokeStyle = PIG.light;
-    ctx.lineWidth = Math.max(1, 1.1 * u);
-    ctx.beginPath();
-    ctx.arc(tx, ty, 3.4 * u, Math.PI * 0.55, Math.PI * 2.45);
-    ctx.stroke();
-    ctx.lineCap = 'butt';
 
     // 手臂
     for (let i = 0; i < 2; i++) {
       const dir = i === 0 ? -1 : 1;
       const down = i === 0 ? down0 : down1;
-      const sx = cx + shift + dir * 19 * u;
-      const sy = bodyTop + 11 * u;
+      const sx = cx + shift + dir * 23 * u;
+      const sy = bodyTop + 16 * u;
       let hx = sx + dir * 2 * u;
-      let hy = sy + 8 * u;
+      let hy = sy + 9 * u;
       if (!down || bothUp) { hx = sx + dir * 7 * u; hy = sy - 2 * u; }
       if (playing && balance > 0.55) { hx = sx + dir * 9 * u; hy = sy - 4 * u; }
-      pigLimb(sx, sy, hx, hy, Math.max(3, Math.round(5 * u)));
+      pigLimb(sx, sy, hx, hy, Math.max(3, Math.round(6 * u)));
       ctx.beginPath();
-      ctx.arc(hx, hy, Math.max(2, 3 * u), 0, Math.PI * 2);
+      ctx.arc(hx, hy, Math.max(2, 3.4 * u), 0, Math.PI * 2);
       ctx.fillStyle = pal.ink;
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(hx, hy, Math.max(1, 2 * u), 0, Math.PI * 2);
+      ctx.arc(hx, hy, Math.max(1, 2.2 * u), 0, Math.PI * 2);
       ctx.fillStyle = PIG.skin;
       ctx.fill();
     }
 
     // 大圆垂耳：先画，头块随后盖住耳根
     for (const dir of [-1, 1]) {
-      const ex = cx + shift + dir * 16 * u;
-      const ey = headTop + 13 * u;
+      const ex = cx + shift + dir * 19 * u;
+      const ey = headTop + 14 * u;
       ctx.beginPath();
-      ctx.ellipse(ex, ey, 5.8 * u, 6.6 * u, dir * 0.25, 0, Math.PI * 2);
+      ctx.ellipse(ex, ey, 6 * u, 8.5 * u, dir * 0.35, 0, Math.PI * 2);
       ctx.fillStyle = PIG.skin;
       ctx.fill();
       ctx.strokeStyle = pal.ink;
       ctx.lineWidth = Math.max(1, 1.4 * u);
       ctx.stroke();
       ctx.beginPath();
-      ctx.ellipse(ex, ey, 3 * u, 3.8 * u, dir * 0.25, 0, Math.PI * 2);
+      ctx.ellipse(ex, ey, 3 * u, 4.8 * u, dir * 0.35, 0, Math.PI * 2);
       ctx.strokeStyle = PIG.skin2;
       ctx.lineWidth = 1;
       ctx.stroke();
     }
 
-    // 头
+    // 小头
     const headRows = [
-      { w: 10 * u, h: 2 * u },
-      { w: 18 * u, h: 4 * u },
-      { w: 24 * u, h: 6 * u },
-      { w: 28 * u, h: 7 * u },
-      { w: 30 * u, h: 5 * u },
-      { w: 26 * u, h: 3 * u },
+      { w: 14 * u, h: 2 * u },
+      { w: 24 * u, h: 3 * u },
+      { w: 30 * u, h: 4 * u },
+      { w: 34 * u, h: 4 * u },
+      { w: 36 * u, h: 4 * u },
+      { w: 34 * u, h: 3 * u },
+      { w: 28 * u, h: 2 * u },
       { w: 20 * u, h: 2 * u }
     ];
     pigBlob(cx + shift, headTop, headRows, PIG.skin, PIG.skin2);
     ctx.fillStyle = PIG.light;
-    ctx.fillRect(Math.round(cx + shift - 9 * u), Math.round(headTop + 4 * u), Math.max(1, Math.round(5 * u)), Math.max(1, Math.round(2 * u)));
+    ctx.fillRect(Math.round(cx + shift - 10 * u), Math.round(headTop + 5 * u), Math.max(1, Math.round(6 * u)), Math.max(1, Math.round(2 * u)));
 
     // 失衡提示：支撑脚光环 + 头顶叹号
     if (playing && ss >= 0 && balance > 0.03) {
       drawBalanceRing(ss === 0 ? skateL : skateR, ground);
-      drawWarnBang(cx + shift, headTop - 22 * u);
+      drawWarnBang(cx + shift, headTop - 17 * u, u);
     }
   }
 
