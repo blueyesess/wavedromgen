@@ -598,6 +598,7 @@
       };
 
       var lastTarget = 0;
+      var clickGuardUntil = 0;
       var screens = $$('.screen');
       var blackout = $('#blackout');
 
@@ -684,6 +685,8 @@
       function resolveTurn(elapsed) {
         var dev = elapsed - S.target;
         S.roundDevs[S.turn] = dev;
+        // 防止结束计时的那一次点击“穿透”到刚出现的按钮，导致成绩一闪而过
+        clickGuardUntil = performance.now() + 450;
         renderResult(elapsed, dev);
         show('result');
       }
@@ -859,6 +862,16 @@
       $('#to-setup').addEventListener('click', function () { show('setup'); });
       $('#s-reveal').addEventListener('pointerdown', onRevealTap);
       blackout.addEventListener('pointerdown', onBlackoutTap);
+
+      // 结束计时后短暂吞掉点击，确保成绩先被看到
+      document.addEventListener('click', function (e) {
+        if (performance.now() < clickGuardUntil) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        }
+      }, true);
+
       window.addEventListener('keydown', onKey);
 
       setMaxTime(S.maxTime);
