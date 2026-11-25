@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>红蓝乱斗模拟器</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: #05070d;
+    color: #e8eefc;
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #arena { display: block; width: 100vw; height: 100vh; }
+
+  /* ---------- 控制面板 ---------- */
+  .panel {
+    position: fixed; top: 16px; left: 16px; width: 236px;
+    padding: 14px 16px 13px;
+    background: rgba(13,18,30,0.8);
+    border: 1px solid rgba(120,160,255,0.14);
+    border-radius: 16px;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 16px 44px rgba(0,0,0,0.55);
+    z-index: 10;
+  }
+  .panel h1 {
+    margin: 0 0 12px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    background: linear-gradient(90deg,#ff6b78,#ffd6db 40%,#bfd6ff 60%,#5b99ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .row { margin-bottom: 11px; }
+  .row .lab {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 12px; color: #9fb0cf; margin-bottom: 5px;
+  }
+  .row .lab b { font-variant-numeric: tabular-nums; font-size: 13px; }
+  .row.red .lab b { color: #ff7b88; }
+  .row.blue .lab b { color: #7ba9ff; }
+  .row.spd .lab b { color: #cfd9ee; }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 4px; border-radius: 4px; outline: none;
+    background: rgba(255,255,255,0.1);
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 15px; height: 15px; border-radius: 50%;
+    background: #eaf1ff; cursor: pointer;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.4), 0 0 10px rgba(150,190,255,.55);
+    transition: transform .12s;
+  }
+  input[type=range]::-webkit-slider-thumb:active { transform: scale(1.18); }
+  input[type=range]::-moz-range-thumb {
+    width: 15px; height: 15px; border: none; border-radius: 50%;
+    background: #eaf1ff; cursor: pointer;
+  }
+  .row.red input[type=range] { accent-color: #ff4d5e; }
+  .row.blue input[type=range] { accent-color: #4d8dff; }
+
+  button {
+    width: 100%; margin-top: 4px; padding: 10px 0;
+    border: none; border-radius: 10px;
+    font-size: 13px; font-weight: 700; letter-spacing: .12em;
+    color: #06101f; cursor: pointer;
+    background: linear-gradient(135deg,#7fb0ff,#c9ddff);
+    box-shadow: 0 6px 18px rgba(90,150,255,.35);
+    transition: transform .12s, box-shadow .12s;
+  }
+  button:hover { transform: translateY(-1px); box-shadow: 0 9px 24px rgba(90,150,255,.5); }
+  button:active { transform: translateY(0) scale(.985); }
+  .hint {
+    margin-top: 9px; font-size: 10.5px; color: #5f6f8c;
+    text-align: center; letter-spacing: .04em;
+  }
+
+  /* ---------- 比分条 ---------- */
+  .score {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 24px;
+    padding: 8px 24px;
+    background: rgba(13,18,30,0.74);
+    border: 1px solid rgba(120,160,255,0.14);
+    border-radius: 999px;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 12px 36px rgba(0,0,0,.45);
+    z-index: 10;
+    white-space: nowrap;
+  }
+  .score .side { text-align: center; min-width: 76px; }
+  .score .num {
+    font-size: 22px; font-weight: 800; line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .score .side.red .num { color: #ff6675; text-shadow: 0 0 16px rgba(255,70,90,.75); }
+  .score .side.blue .num { color: #6ba2ff; text-shadow: 0 0 16px rgba(70,120,255,.75); }
+  .score .lbl { font-size: 10px; color: #7d8cab; margin-top: 4px; letter-spacing: .08em; }
+  .score .lbl span { color: #b9c6e0; font-variant-numeric: tabular-nums; }
+  .score .timer {
+    font-size: 12px; color: #93a3c2; font-variant-numeric: tabular-nums;
+    letter-spacing: .08em; padding: 0 2px;
+  }
+
+  /* ---------- 结算 ---------- */
+  .banner {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at center, rgba(5,7,13,.55), rgba(5,7,13,.86));
+    opacity: 0; pointer-events: none; transition: opacity .3s ease;
+  }
+  .banner.show { opacity: 1; pointer-events: auto; }
+  .banner-inner {
+    text-align: center; padding: 30px 44px;
+    background: rgba(13,18,30,.85);
+    border: 1px solid rgba(120,160,255,.18);
+    border-radius: 20px;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 24px 70px rgba(0,0,0,.6);
+    transform: translateY(10px) scale(.97);
+    transition: transform .35s cubic-bezier(.2,.9,.25,1.2);
+  }
+  .banner.show .banner-inner { transform: translateY(0) scale(1); }
+  .banner-title {
+    font-size: 34px; font-weight: 800; letter-spacing: .1em; margin-bottom: 8px;
+  }
+  .banner-title.red { color: #ff5b6b; text-shadow: 0 0 30px rgba(255,60,90,.65); }
+  .banner-title.blue { color: #5b91ff; text-shadow: 0 0 30px rgba(60,110,255,.65); }
+  .banner-title.draw { color: #cfd9ee; text-shadow: 0 0 30px rgba(200,220,255,.4); }
+  .banner-sub { font-size: 12.5px; color: #8fa0bf; letter-spacing: .08em; margin-bottom: 20px; }
+  .banner button { width: auto; padding: 10px 34px; }
+
+  @media (max-width: 680px) {
+    .panel {
+      top: auto; bottom: 12px; left: 12px; right: 12px; width: auto;
+      padding: 12px 14px 10px;
+    }
+    .panel h1 { display: none; }
+    .score { top: 12px; gap: 14px; padding: 6px 16px; }
+    .score .num { font-size: 18px; }
+    .score .side { min-width: 58px; }
+    .banner-title { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="arena"></canvas>
+
+<div class="score">
+  <div class="side red">
+    <div class="num" id="redAlive">0</div>
+    <div class="lbl">红方 · 击杀 <span id="redKills">0</span></div>
+  </div>
+  <div class="timer" id="timer">0.0s</div>
+  <div class="side blue">
+    <div class="num" id="blueAlive">0</div>
+    <div class="lbl">蓝方 · 击杀 <span id="blueKills">0</span></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h1>乱斗模拟器</h1>
+  <div class="row red">
+    <div class="lab"><span>红方人数</span><b id="redN">25</b></div>
+    <input id="redRange" type="range" min="1" max="80" value="25">
+  </div>
+  <div class="row blue">
+    <div class="lab"><span>蓝方人数</span><b id="blueN">25</b></div>
+    <input id="blueRange" type="range" min="1" max="80" value="25">
+  </div>
+  <div class="row spd">
+    <div class="lab"><span>战斗速度</span><b id="speedN">1.0×</b></div>
+    <input id="speedRange" type="range" min="25" max="300" value="100">
+  </div>
+  <button id="startBtn">重新开始</button>
+  <div class="hint">空格键 · 立即开打</div>
+</div>
+
+<div class="banner" id="banner">
+  <div class="banner-inner">
+    <div class="banner-title" id="bannerTitle">红方胜利</div>
+    <div class="banner-sub" id="bannerSub">用时 0.0s</div>
+    <button id="againBtn">再来一局</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* =========================== 基础 =========================== */
+  const canvas = document.getElementById('arena');
+  const ctx = canvas.getContext('2d');
+  const decal = document.createElement('canvas');
+  const dctx = decal.getContext('2d');
+
+  let W = 0, H = 0, DPR = 1;
+
+  const TEAM = {
+    red:  { color: '#ff4d5e', dark: '#5c0c17', light: '#ffc4c9', glow: 'rgba(255,70,90,0.9)',  blood: '160,20,35' },
+    blue: { color: '#4d8dff', dark: '#0c2260', light: '#c4d8ff', glow: 'rgba(70,120,255,0.9)', blood: '20,60,160' }
+  };
+
+  const CFG = {
+    maxSpeed: 108,
+    accel: 900,
+    damping: 5,
+    attackRange: 4,
+    attackInterval: 0.5,
+    dmgMin: 9,
+    dmgMax: 17,
+    knockback: 130
+  };
+
+  let agents = [], particles = [], floaters = [], corpses = [];
+  let running = false, gameOver = false, winner = null;
+  let elapsed = 0, speedMul = 1, shake = 0;
+
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  /* =========================== 尺寸 =========================== */
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = canvas.clientWidth;
+    H = canvas.clientHeight;
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+    decal.width = Math.round(W * DPR);
+    decal.height = Math.round(H * DPR);
+    dctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+
+  /* =========================== 生成 =========================== */
+  function makeAgent(team, x, y) {
+    const r = rand(9, 12);
+    return {
+      team, x, y, vx: 0, vy: 0, r,
+      maxHp: 100, hp: 100,
+      cd: rand(0, 0.35),
+      hitFlash: 0,
+      attackAnim: null,
+      face: team === 'red' ? 0 : Math.PI,
+      orbitDir: Math.random() < 0.5 ? -1 : 1,
+      speedMul: rand(0.9, 1.1),
+      kills: 0, damage: 0,
+      alive: true
+    };
+  }
+
+  function spawnTeam(team, n) {
+    const gap = 30;
+    const maxRows = Math.max(1, Math.floor((H - 150) / gap));
+    const rows = Math.min(n, maxRows);
+    const cols = Math.ceil(n / rows);
+    const blockH = (rows - 1) * gap;
+    const cy = H / 2;
+    const colGap = Math.min(gap, (W * 0.28) / Math.max(cols, 1));
+    const baseX = team === 'red' ? 74 : W - 74;
+
+    for (let i = 0; i < n; i++) {
+      const row = i % rows;
+      const col = Math.floor(i / rows);
+      const x = (team === 'red' ? baseX + col * colGap : baseX - col * colGap) + rand(-4, 4);
+      const y = cy - blockH / 2 + row * gap + rand(-4, 4);
+      agents.push(makeAgent(team, x, y));
+    }
+  }
+
+  function startBattle() {
+    agents = []; particles = []; floaters = []; corpses = [];
+    dctx.clearRect(0, 0, W, H);
+    elapsed = 0; shake = 0; winner = null;
+    gameOver = false; running = true;
+
+    banner.classList.remove('show');
+    spawnTeam('red', +redRange.value);
+    spawnTeam('blue', +blueRange.value);
+    startBtn.textContent = '重新开始';
+  }
+
+  /* =========================== 战斗 =========================== */
+  function attack(a, t) {
+    a.cd = CFG.attackInterval * rand(0.85, 1.2);
+
+    const dmg = Math.round(rand(CFG.dmgMin, CFG.dmgMax));
+    t.hp -= dmg;
+    t.hitFlash = 0.12;
+    a.damage += dmg;
+
+    const dx = t.x - a.x, dy = t.y - a.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const kx = dx / d, ky = dy / d;
+
+    t.vx += kx * CFG.knockback;
+    t.vy += ky * CFG.knockback;
+    a.vx += kx * 32;
+    a.vy += ky * 32;
+
+    a.attackAnim = { t: 0.14, ang: Math.atan2(ky, kx) };
+
+    if (Math.random() < 0.45) {
+      floaters.push({
+        x: t.x + rand(-7, 7), y: t.y - t.r - 7,
+        vy: -42, life: 0.6, max: 0.6,
+        text: '-' + dmg, color: TEAM[a.team].light
+      });
+      if (floaters.length > 60) floaters.shift();
+    }
+
+    for (let i = 0; i < 5; i++) {
+      const ang = Math.atan2(ky, kx) + rand(-0.9, 0.9);
+      const sp = rand(40, 150);
+      particles.push({
+        x: t.x, y: t.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+        r: rand(1.2, 2.8), life: rand(0.25, 0.5), max: 0.5,
+        color: TEAM[a.team].color
+      });
+    }
+
+    if (t.hp <= 0) kill(t, a);
+  }
+
+  function kill(v, killer) {
+    if (!v.alive) return;
+    v.alive = false;
+    v.hp = 0;
+    if (killer) killer.kills++;
+
+    corpses.push({ x: v.x, y: v.y, r: v.r, t: 1.4, max: 1.4, team: v.team });
+    spawnBlood(v.x, v.y, v.team, 12);
+    splatDecal(v.x, v.y, v.team);
+
+    shake = Math.min(shake + 3.5, 13);
+  }
+
+  function spawnBlood(x, y, team, n) {
+    for (let i = 0; i < n; i++) {
+      const ang = rand(0, Math.PI * 2);
+      const sp = rand(30, 190);
+      particles.push({
+        x, y,
+        vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+        r: rand(1.5, 4.5), life: rand(0.5, 1.1), max: 1.1,
+        color: TEAM[team].color
+      });
+    }
+    if (particles.length > 700) particles.splice(0, particles.length - 700);
+  }
+
+  function splatDecal(x, y, team) {
+    const c = TEAM[team].blood;
+    for (let i = 0; i < 7; i++) {
+      const a = rand(0, Math.PI * 2), d = rand(0, 17);
+      dctx.beginPath();
+      dctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, rand(3, 10), 0, Math.PI * 2);
+      dctx.fillStyle = 'rgba(' + c + ',' + rand(0.16, 0.36) + ')';
+      dctx.fill();
+    }
+  }
+
+  function checkWin() {
+    let redAlive = 0, blueAlive = 0;
+    for (const a of agents) {
+      if (!a.alive) continue;
+      if (a.team === 'red') redAlive++;
+      else blueAlive++;
+    }
+    if (redAlive > 0 && blueAlive > 0) return;
+
+    running = false; gameOver = true;
+    winner = redAlive > 0 ? 'red' : (blueAlive > 0 ? 'blue' : 'draw');
+
+    bannerTitle.className = 'banner-title ' + (winner === 'draw' ? 'draw' : winner);
+    bannerTitle.textContent = winner === 'draw' ? '同归于尽' : (winner === 'red' ? '红方胜利' : '蓝方胜利');
+
+    let mvp = null;
+    for (const a of agents) if (!mvp || a.kills > mvp.kills) mvp = a;
+    let sub = '用时 ' + elapsed.toFixed(1) + 's';
+    if (mvp && mvp.kills > 0) {
+      sub += ' · MVP ' + (mvp.team === 'red' ? '红' : '蓝') + '球 ' + mvp.kills + ' 杀';
+    }
+    bannerSub.textContent = sub;
+    banner.classList.add('show');
+  }
+
+  /* =========================== 更新 =========================== */
+  function resolveOverlaps(list) {
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      if (!a.alive) continue;
+      for (let j = i + 1; j < list.length; j++) {
+        const b = list[j];
+        if (!b.alive) continue;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const minD = a.r + b.r;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < minD * minD && d2 > 0.0001) {
+          const d = Math.sqrt(d2);
+          const push = (minD - d) * 0.5;
+          const ux = dx / d, uy = dy / d;
+          a.x -= ux * push; a.y -= uy * push;
+          b.x += ux * push; b.y += uy * push;
+        }
+      }
+    }
+  }
+
+  function update(dt) {
+    elapsed += dt;
+
+    const alive = agents.filter(a => a.alive);
+    const reds = alive.filter(a => a.team === 'red');
+    const blues = alive.filter(a => a.team === 'blue');
+
+    for (const a of alive) {
+      if (!a.alive) continue;
+
+      a.cd -= dt;
+      if (a.hitFlash > 0) a.hitFlash = Math.max(0, a.hitFlash - dt);
+      if (a.attackAnim) {
+        a.attackAnim.t -= dt;
+        if (a.attackAnim.t <= 0) a.attackAnim = null;
+      }
+
+      const foes = a.team === 'red' ? blues : reds;
+      let best = null, bestD2 = Infinity;
+      for (const o of foes) {
+        if (!o.alive) continue;
+        const dx = o.x - a.x, dy = o.y - a.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) { bestD2 = d2; best = o; }
+      }
+      if (!best) continue;
+
+      const dist = Math.sqrt(bestD2) || 0.001;
+      const nx = (best.x - a.x) / dist, ny = (best.y - a.y) / dist;
+      a.face = Math.atan2(ny, nx);
+
+      const reach = a.r + best.r + CFG.attackRange;
+      let ax = 0, ay = 0;
+
+      if (dist > reach * 0.95) {
+        ax += nx * CFG.accel;
+        ay += ny * CFG.accel;
+      } else {
+        const orb = a.orbitDir;
+        ax += -ny * orb * CFG.accel * 0.75;
+        ay += nx * orb * CFG.accel * 0.75;
+        if (dist < reach * 0.7) {
+          ax -= nx * CFG.accel * 0.9;
+          ay -= ny * CFG.accel * 0.9;
+        }
+      }
+
+      for (const o of alive) {
+        if (o === a) continue;
+        const dx = a.x - o.x, dy = a.y - o.y;
+        const d2 = dx * dx + dy * dy;
+        const minD = (a.r + o.r) * 1.9;
+        if (d2 > 0.0001 && d2 < minD * minD) {
+          const d = Math.sqrt(d2);
+          const f = 1 - d / minD;
+          const s = o.team === a.team ? 1400 : 500;
+          ax += (dx / d) * f * s;
+          ay += (dy / d) * f * s;
+        }
+      }
+
+      a.vx += ax * dt;
+      a.vy += ay * dt;
+
+      const damp = Math.exp(-CFG.damping * dt);
+      a.vx *= damp; a.vy *= damp;
+
+      const hpRatio = a.hp / a.maxHp;
+      const maxS = CFG.maxSpeed * a.speedMul * (hpRatio < 0.35 ? 1.18 : 1);
+      const sp = Math.hypot(a.vx, a.vy);
+      if (sp > maxS) { a.vx = a.vx / sp * maxS; a.vy = a.vy / sp * maxS; }
+
+      a.x += a.vx * dt;
+      a.y += a.vy * dt;
+
+      if (a.x < a.r) { a.x = a.r; a.vx = Math.abs(a.vx) * 0.45; }
+      if (a.x > W - a.r) { a.x = W - a.r; a.vx = -Math.abs(a.vx) * 0.45; }
+      if (a.y < a.r) { a.y = a.r; a.vy = Math.abs(a.vy) * 0.45; }
+      if (a.y > H - a.r) { a.y = H - a.r; a.vy = -Math.abs(a.vy) * 0.45; }
+
+      if (dist <= reach + 2 && a.cd <= 0 && best.alive) attack(a, best);
+    }
+
+    resolveOverlaps(alive);
+    checkWin();
+  }
+
+  function updateEffects(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life -= dt;
+      if (p.life <= 0) { particles.splice(i, 1); continue; }
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      const k = Math.exp(-3.4 * dt);
+      p.vx *= k; p.vy *= k;
+    }
+    for (let i = floaters.length - 1; i >= 0; i--) {
+      const f = floaters[i];
+      f.life -= dt;
+      if (f.life <= 0) { floaters.splice(i, 1); continue; }
+      f.y += f.vy * dt;
+      f.vy *= Math.exp(-2 * dt);
+    }
+    for (let i = corpses.length - 1; i >= 0; i--) {
+      const c = corpses[i];
+      c.t -= dt;
+      if (c.t <= 0) corpses.splice(i, 1);
+    }
+    shake *= Math.exp(-6 * dt);
+    if (shake < 0.05) shake = 0;
+  }
+
+  /* =========================== 绘制 =========================== */
+  function roundRect(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function drawBackground() {
+    const g = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.78);
+    g.addColorStop(0, '#101728');
+    g.addColorStop(1, '#04060c');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.beginPath();
+    const gs = 48;
+    for (let x = 0; x <= W; x += gs) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+    for (let y = 0; y <= H; y += gs) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+    ctx.strokeStyle = 'rgba(110,150,230,0.055)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // 左右阵营的气氛光
+    const rl = ctx.createRadialGradient(0, H / 2, 0, 0, H / 2, H * 0.85);
+    rl.addColorStop(0, 'rgba(255,60,80,0.085)');
+    rl.addColorStop(1, 'rgba(255,60,80,0)');
+    ctx.fillStyle = rl;
+    ctx.fillRect(0, 0, W * 0.5, H);
+
+    const bl = ctx.createRadialGradient(W, H / 2, 0, W, H / 2, H * 0.85);
+    bl.addColorStop(0, 'rgba(60,110,255,0.085)');
+    bl.addColorStop(1, 'rgba(60,110,255,0)');
+    ctx.fillStyle = bl;
+    ctx.fillRect(W * 0.5, 0, W * 0.5, H);
+  }
+
+  function drawBody(a) {
+    const T = TEAM[a.team];
+    const lunge = a.attackAnim ? a.attackAnim.t / 0.14 : 0;
+    const r = a.r * (1 + lunge * 0.12);
+    const hpRatio = a.hp / a.maxHp;
+
+    // 地面阴影
+    ctx.beginPath();
+    ctx.ellipse(a.x, a.y + r * 0.6, r * 0.92, r * 0.42, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.fill();
+
+    // 本体
+    ctx.save();
+    ctx.shadowColor = T.glow;
+    ctx.shadowBlur = hpRatio < 0.35 ? 18 + Math.sin(performance.now() / 110) * 7 : 10;
+    const g = ctx.createRadialGradient(a.x - r * 0.36, a.y - r * 0.4, r * 0.08, a.x, a.y, r * 1.05);
+    g.addColorStop(0, T.light);
+    g.addColorStop(0.5, T.color);
+    g.addColorStop(1, T.dark);
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.restore();
+
+    // 边缘高光
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, r, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // 朝向的小眼睛
+    const fx = Math.cos(a.face), fy = Math.sin(a.face);
+    const px = -fy, py = fx;
+    ctx.fillStyle = 'rgba(6,8,16,0.82)';
+    for (const s of [-1, 1]) {
+      const ex = a.x + fx * r * 0.42 + px * s * r * 0.3;
+      const ey = a.y + fy * r * 0.42 + py * s * r * 0.3;
+      ctx.beginPath();
+      ctx.arc(ex, ey, Math.max(1.2, r * 0.17), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 受击白闪
+    if (a.hitFlash > 0) {
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,' + (a.hitFlash / 0.12) * 0.72 + ')';
+      ctx.fill();
+    }
+
+    // 挥击弧光
+    if (a.attackAnim) {
+      const k = a.attackAnim.t / 0.14;
+      const ang = a.attackAnim.ang;
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, r + 5.5, ang - 0.78, ang + 0.78);
+      ctx.strokeStyle = 'rgba(255,255,255,' + k * 0.85 + ')';
+      ctx.lineWidth = 3 * k + 1;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+  }
+
+  function drawBar(a) {
+    const r = a.r;
+    const hpRatio = Math.max(0, a.hp / a.maxHp);
+    const bw = r * 2.4, bh = 3.5;
+    const bx = a.x - bw / 2, by = a.y - r - 9;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    roundRect(bx, by, bw, bh, 2);
+    ctx.fill();
+
+    ctx.fillStyle = hpRatio > 0.5 ? TEAM[a.team].color
+                 : hpRatio > 0.25 ? '#ffb020' : '#ff3b3b';
+    if (hpRatio > 0) {
+      roundRect(bx, by, bw * hpRatio, bh, 2);
+      ctx.fill();
+    }
+  }
+
+  function drawCorpse(c) {
+    const k = c.t / c.max;
+    const T = TEAM[c.team];
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, c.r * (1 + (1 - k) * 0.55), 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,' + k * 0.35 + ')';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, c.r * 0.7, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(' + T.blood + ',' + k * 0.55 + ')';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  function render() {
+    drawBackground();
+
+    // 地面血迹
+    ctx.drawImage(decal, 0, 0, W, H);
+
+    ctx.save();
+    if (shake > 0.1) ctx.translate(rand(-shake, shake), rand(-shake, shake));
+
+    // 尸体
+    for (const c of corpses) drawCorpse(c);
+
+    // 粒子
+    for (const p of particles) {
+      const k = Math.max(0, p.life / p.max);
+      ctx.globalAlpha = k;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r * k, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // 小球本体
+    for (const a of agents) if (a.alive) drawBody(a);
+    // 血条单独一层，避免被别的球遮住
+    for (const a of agents) if (a.alive) drawBar(a);
+
+    // 伤害数字
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const f of floaters) {
+      const k = f.life / f.max;
+      ctx.globalAlpha = Math.min(1, k * 1.6);
+      ctx.font = '700 13px ui-sans-serif, system-ui, sans-serif';
+      ctx.fillStyle = f.color;
+      ctx.shadowColor = 'rgba(0,0,0,0.9)';
+      ctx.shadowBlur = 4;
+      ctx.fillText(f.text, f.x, f.y);
+      ctx.shadowBlur = 0;
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.restore();
+
+    // 边缘暗角
+    const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  /* =========================== HUD =========================== */
+  const redAliveEl = document.getElementById('redAlive');
+  const blueAliveEl = document.getElementById('blueAlive');
+  const redKillsEl = document.getElementById('redKills');
+  const blueKillsEl = document.getElementById('blueKills');
+  const timerEl = document.getElementById('timer');
+
+  function updateHUD() {
+    let ra = 0, ba = 0, rk = 0, bk = 0;
+    for (const a of agents) {
+      if (a.team === 'red') { rk += a.kills; if (a.alive) ra++; }
+      else { bk += a.kills; if (a.alive) ba++; }
+    }
+    redAliveEl.textContent = ra;
+    blueAliveEl.textContent = ba;
+    redKillsEl.textContent = rk;
+    blueKillsEl.textContent = bk;
+    timerEl.textContent = elapsed.toFixed(1) + 's';
+  }
+
+  /* =========================== 主循环 =========================== */
+  let last = performance.now();
+  function frame(now) {
+    let dt = (now - last) / 1000;
+    last = now;
+    if (dt > 0.05) dt = 0.05;
+
+    const sdt = dt * speedMul;
+
+    if (running && !gameOver) update(sdt);
+    updateEffects(sdt);
+
+    render();
+    updateHUD();
+
+    requestAnimationFrame(frame);
+  }
+
+  /* =========================== 控件 =========================== */
+  const redRange = document.getElementById('redRange');
+  const blueRange = document.getElementById('blueRange');
+  const speedRange = document.getElementById('speedRange');
+  const redN = document.getElementById('redN');
+  const blueN = document.getElementById('blueN');
+  const speedN = document.getElementById('speedN');
+  const startBtn = document.getElementById('startBtn');
+  const againBtn = document.getElementById('againBtn');
+  const banner = document.getElementById('banner');
+  const bannerTitle = document.getElementById('bannerTitle');
+  const bannerSub = document.getElementById('bannerSub');
+
+  redRange.addEventListener('input', () => { redN.textContent = redRange.value; });
+  blueRange.addEventListener('input', () => { blueN.textContent = blueRange.value; });
+  speedRange.addEventListener('input', () => {
+    speedMul = speedRange.value / 100;
+    speedN.textContent = speedMul.toFixed(1) + '×';
+  });
+
+  startBtn.addEventListener('click', startBattle);
+  againBtn.addEventListener('click', startBattle);
+
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') { e.preventDefault(); startBattle(); }
+  });
+
+  /* =========================== 启动 =========================== */
+  resize();
+  window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+  startBattle();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
