@@ -308,22 +308,28 @@
   }
 
   function musicStep(step, t) {
-    const bar = Math.floor(step / 16) % 4;
+    const bar = Math.floor(step / 16) % 8;
     const s = step % 16;
-    const ch = MUSIC_PROG[bar];
+    const ch = MUSIC_PROG[bar % 4];
+    const B = bar >= 4; // 后半段加花，8 小节一循环
 
-    // 低音：每拍根音，反拍五度
+    // 低音：每拍根音，反拍五度（B 段改走高八度，托住情绪）
     if (s % 4 === 0) musicVoice(ch.root, t, 0.22, 'triangle', 0.32);
-    else if (s % 4 === 2) musicVoice(ch.root + 12, t, 0.1, 'triangle', 0.15);
+    else if (s % 4 === 2) musicVoice(B ? ch.root + 7 : ch.root + 12, t, 0.1, 'triangle', 0.15);
 
-    // 琶音：八分音符，随距离加高八度
+    // 琶音：八分音符，B 段整体上移一位并叠高八度
     if (s % 2 === 0) {
-      const n = ch.notes[(Math.floor(s / 2) + bar) % 4];
+      const n = ch.notes[(Math.floor(s / 2) + (B ? 2 : 0)) % 4];
       musicVoice(n, t, 0.1, 'square', 0.1);
-      if (dist > 260) musicVoice(n + 12, t, 0.07, 'square', 0.05);
-    } else {
-      // 反拍打点
-      musicVoice(7200, t, 0.02, 'square', 0.04);
+      if (B || dist > 260) musicVoice(n + 12, t, 0.07, 'square', 0.05);
+    } else if (B) {
+      // 反拍打点只出现在 B 段
+      musicVoice(7200, t, 0.02, 'square', 0.06);
+    }
+
+    // 第 8 小节收尾过门
+    if (bar === 7 && s >= 12) {
+      musicVoice(ch.notes[(s - 12) % 4] + 12, t, 0.08, 'square', 0.09);
     }
   }
 
@@ -332,7 +338,7 @@
     const ahead = ac.currentTime + 0.2;
     while (music.next < ahead) {
       musicStep(music.step, music.next);
-      music.step = (music.step + 1) % 64;
+      music.step = (music.step + 1) % 128;
       music.next += MUSIC_STEP;
     }
     // 隧道里闷一点，速度越快越亮
