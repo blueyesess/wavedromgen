@@ -281,6 +281,100 @@
     blip(90, 0.4, 'square', 0.3, 40, 0.05);
   }
 
+  /* ---------------- 背景音乐（程序化 chiptune） ---------------- */
+  const MUSIC_PROG = [
+    { root: 48, notes: [60, 64, 67, 72] }, // C
+    { root: 45, notes: [57, 60, 64, 69] }, // Am
+    { root: 41, notes: [53, 57, 60, 65] }, // F
+    { root: 43, notes: [55, 59, 62, 67] }  // G
+  ];
+  const MUSIC_STEP = BEAT / 4; // 16 分音符
+  let music = null;
+
+  function mtof(n) { return 440 * Math.pow(2, (n - 69) / 12); }
+
+  function musicVoice(note, t, dur, type, vol) {
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+    o.type = type;
+    o.frequency.value = mtof(note);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g);
+    g.connect(music.lp);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+
+  function musicStep(step, t) {
+    const bar = Math.floor(step / 16) % 4;
+    const s = step % 16;
+    const ch = MUSIC_PROG[bar];
+
+    // 低音：每拍根音，反拍五度
+    if (s % 4 === 0) musicVoice(ch.root, t, 0.22, 'triangle', 0.32);
+    else if (s % 4 === 2) musicVoice(ch.root + 12, t, 0.1, 'triangle', 0.15);
+
+    // 琶音：八分音符，随距离加高八度
+    if (s % 2 === 0) {
+      const n = ch.notes[(Math.floor(s / 2) + bar) % 4];
+      musicVoice(n, t, 0.1, 'square', 0.1);
+      if (dist > 260) musicVoice(n + 12, t, 0.07, 'square', 0.05);
+    } else {
+      // 反拍打点
+      musicVoice(7200, t, 0.02, 'square', 0.04);
+    }
+  }
+
+  function musicTick() {
+    if (!music || !ac) return;
+    const ahead = ac.currentTime + 0.2;
+    while (music.next < ahead) {
+      musicStep(music.step, music.next);
+      music.step = (music.step + 1) % 64;
+      music.next += MUSIC_STEP;
+    }
+    // 隧道里闷一点，速度越快越亮
+    const cut = 2600 - tunnelMix() * 1700 + Math.min(900, Math.max(0, speed - 26) * 45);
+    music.lp.frequency.setTargetAtTime(Math.max(650, cut), ac.currentTime, 0.3);
+  }
+
+  function musicStart() {
+    if (!ac || music) return;
+    const bus = ac.createGain();
+    const lp = ac.createBiquadFilter();
+    bus.gain.setValueAtTime(0.0001, ac.currentTime);
+    bus.gain.exponentialRampToValueAtTime(0.6, ac.currentTime + 0.35);
+    bus.connect(master);
+    lp.type = 'lowpass';
+    lp.frequency.value = 2600;
+    lp.Q.value = 0.4;
+    lp.connect(bus);
+    music = {
+      bus: bus,
+      lp: lp,
+      step: 0,
+      next: ac.currentTime + 0.08,
+      timer: setInterval(musicTick, 60)
+    };
+  }
+
+  function musicStop() {
+    if (!music) return;
+    const m = music;
+    music = null;
+    clearInterval(m.timer);
+    try {
+      m.bus.gain.cancelScheduledValues(ac.currentTime);
+      m.bus.gain.setValueAtTime(Math.max(0.0001, m.bus.gain.value), ac.currentTime);
+      m.bus.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.18);
+    } catch (e) {}
+    setTimeout(() => {
+      try { m.bus.disconnect(); } catch (e) {}
+    }, 280);
+  }
+
   /* ---------------- 布局 ---------------- */
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
@@ -381,6 +475,7 @@
     reset();
     state = 'playing';
     overlay.classList.add('hide');
+    musicStart();
     if (!taught) {
       taught = true;
       try { localStorage.setItem('yibu.taught', '1'); } catch (e) {}
@@ -437,6 +532,7 @@
     bothUpT = 0;
     freezeT = 0.07;
     syncMult();
+    musicStop();
     sfxFall();
     for (let i = 0; i < 14; i++) {
       particles.push({
@@ -484,6 +580,7 @@
     keysDown.clear();
     if (v) {
       tipEl.classList.remove('on');
+      musicStop();
       overlay.classList.remove('hide');
       overlay.innerHTML =
         '<div class="panel">' +
@@ -496,6 +593,7 @@
       feet[0].plant = RESUME_PLANT;
       feet[1].plant = RESUME_PLANT;
       if (ac && ac.state === 'suspended') ac.resume();
+      musicStart();
     }
   }
 
